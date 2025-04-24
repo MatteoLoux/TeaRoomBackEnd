@@ -1,9 +1,7 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session, make_response
 from argon2 import PasswordHasher, exceptions
 from datetime import datetime, timedelta, timezone
-import secrets
-import jwt
-import os
+
 from db import get_conn
 
 login_routes = Blueprint('login_routes', __name__)
@@ -11,9 +9,6 @@ login_routes = Blueprint('login_routes', __name__)
 
 @login_routes.route("/login", methods=["POST"])
 def login():
-    print("Requête reçue :", request.headers, flush=True)
-    print("Corps brut :", request.data, flush=True)
-    print("JSON interprété :", request.get_json(), flush=True)
     data = request.get_json()
     email = data.get("email")
     password = data.get("password")
@@ -37,26 +32,21 @@ def login():
     ph = PasswordHasher()
     try:
         ph.verify(hashed_pw, password)
-        token = secrets.token_hex(32)
-        token = jwt.encode(
-            {"user_id": user_id, "exp": datetime.now(timezone.utc) + timedelta(days=1)},
-            os.getenv("SECRET_KEY"),
-            algorithm="HS256"
-        )
-        if isinstance(token, bytes):
-            token = token.decode("utf-8")
-
         cursor.execute("""
             UPDATE users
             SET n_password_failures = 0, last_failed = NULL, last_login = %s
             WHERE id = %s
         """, (now, user_id))
+
         conn.commit(); 
         cursor.close(); 
-        conn.close() 
-        return jsonify({
+        conn.close()
+
+        session['user_id'] = user_id
+        session['is_admin'] = is_admin
+        
+        response = make_response(jsonify({
             "success": True,
-            "token": token,
             "user": {
                 "id": user_id,
                 "email": email,
@@ -64,7 +54,9 @@ def login():
                 "lastname": lastname,
                 "is_admin": is_admin
             }
-        })
+        }))
+
+        return response
 
     except exceptions.VerifyMismatchError:
         n_failures += 1

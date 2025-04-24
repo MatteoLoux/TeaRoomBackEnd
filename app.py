@@ -1,14 +1,29 @@
 from flask import Flask
 from flask_cors import CORS
+from flask_session import Session
+from dotenv import load_dotenv
 import os
+from db import get_session_engine
+
 from routes.users import users
 from routes.cart import cart
 from routes.session import session
 from routes.teas import teas
 from routes.goodies import goodies
 
+load_dotenv()
+
 app = Flask(__name__)
-CORS(app)
+CORS(app, supports_credentials=True)
+
+# Configuration des sessions avec PostgreSQL
+app.config['SESSION_TYPE'] = 'sqlalchemy'
+app.config['SESSION_SQLALCHEMY'] = get_session_engine()
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SECURE'] = True  # 
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+Session(app)
 
 # Blueprints enregistrés
 app.register_blueprint(users, url_prefix="/users")
