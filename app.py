@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 import os
 from flask_sqlalchemy  import SQLAlchemy
 
-from db import db_session
 from routes.users import users
 from routes.cart import cart
 from routes.session import session
