@@ -3,8 +3,8 @@ from flask_cors import CORS
 from flask_session import Session
 from dotenv import load_dotenv
 import os
-from flask_sqlalchemy  import SQLAlchemy
 
+from db import db_session
 from routes.users import users
 from routes.cart import cart
 from routes.session import session
@@ -19,14 +19,13 @@ CORS(app, supports_credentials=True)
 # Configuration des sessions avec PostgreSQL
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
 app.config['SESSION_TYPE'] = 'sqlalchemy'
+app.config['SESSION_SQLALCHEMY'] = db_session
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'None'
 app.config['SESSION_COOKIE_SECURE'] = True
 
-db = SQLAlchemy(app)
-
-app.config['SESSION_SQLALCHEMY'] = db
-
+db_session.init_app(app)
+db_session.create_all(app=app)
 Session(app)
 
 # Blueprints enregistrés
