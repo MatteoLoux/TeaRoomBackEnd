@@ -27,8 +27,6 @@ db = SQLAlchemy(app)
 
 app.config['SESSION_SQLALCHEMY'] = db
 
-db.init_app(app)
-db.create_all(app=app)
 Session(app)
 
 # Blueprints enregistrés
