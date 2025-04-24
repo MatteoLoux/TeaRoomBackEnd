@@ -11,6 +11,8 @@ login_routes = Blueprint('login_routes', __name__)
 
 @login_routes.route("/login", methods=["POST"])
 def login():
+    print("Raw data:", request.data)
+    print("Parsed JSON:", request.get_json())   
     data = request.get_json()
     email = data.get("email")
     password = data.get("password")
