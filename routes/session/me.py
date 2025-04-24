@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, session
-from db import get_conn
+from db import db_session, User
 
 me_routes = Blueprint('me_routes', __name__)
 
@@ -12,18 +12,10 @@ def get_user_info():
     if not user_id:
         return jsonify({"logged_in": False})
 
-    conn = get_conn()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, email, firstname, lastname, is_admin
-        FROM users
-        WHERE id = %s
-    """, (user_id,))
-    user = cursor.fetchone()
-    cursor.close()
-    conn.close()
+    user = db_session.session.query(User).get(user_id)
 
     if user is None:
+        session.clear()
         return jsonify({"logged_in": False})
 
     user_id, email, firstname, lastname, is_admin = user
