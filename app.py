@@ -14,7 +14,7 @@ from routes.goodies import goodies
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True)
+CORS(app, supports_credentials=True, origins="*")
 
 # Configuration des sessions avec PostgreSQL
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
