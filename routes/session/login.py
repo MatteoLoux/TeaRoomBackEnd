@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 import secrets
 import jwt
 import os
-from db import get_connection
+from db import get_conn
 
 login_routes = Blueprint('login_routes', __name__)
 
@@ -16,7 +16,7 @@ def login():
     password = data.get("password")
     now = datetime.now(timezone.utc)
 
-    conn = get_connection()
+    conn = get_conn()
     cursor = conn.cursor()
     cursor.execute("SELECT id, email, password, is_admin, firstname, lastname, n_password_failures, last_failed, last_login FROM users WHERE email = %s", (email,))
     user = cursor.fetchone()
