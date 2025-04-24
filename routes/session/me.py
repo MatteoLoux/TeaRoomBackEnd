@@ -6,7 +6,7 @@ me_routes = Blueprint('me_routes', __name__)
 
 @me_routes.route("/me", methods=["GET"])
 def get_user_info():
-    print("DEBUG SESSION CONTENT =", dict(session), flush=True)
+    print("DEBUG SESSION:", dict(session), flush=True)
     user_id = session.get("user_id")
 
     if not user_id:

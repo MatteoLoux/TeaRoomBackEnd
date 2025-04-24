@@ -28,7 +28,8 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'None'
 
 
 db_session.init_app(app)
-
+with app.app_context():
+    db_session.create_all()
 Session(app)
 
 # Blueprints enregistrés
