@@ -3,6 +3,7 @@ from flask_cors import CORS
 from flask_session import Session
 from dotenv import load_dotenv
 import os
+from flask_sqlalchemy  import SQLAlchemy
 
 from db import db_session
 from routes.users import users
@@ -24,7 +25,12 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'None'
 app.config['SESSION_COOKIE_SECURE'] = True
 
-db_session.init_app(app)
+db = SQLAlchemy(app)
+
+app.config['SESSION_SQLALCHEMY'] = db
+
+db.init_app(app)
+db.create_all(app=app)
 Session(app)
 
 # Blueprints enregistrés
