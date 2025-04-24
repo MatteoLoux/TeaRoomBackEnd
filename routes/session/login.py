@@ -37,9 +37,9 @@ def login():
         session['is_admin'] = user.is_admin
         session.permanent = True
         print(session,flush=True)
-        response = make_response(jsonify({
+        response = jsonify({
             "success": True
-        }))
+        })
         print("👀 Origin:", request.headers.get("Origin"), flush=True)
         print("👀 Set-Cookie to browser:", response.headers.get("Set-Cookie"), flush=True)      
         return response
