@@ -12,21 +12,19 @@ def get_user_info():
     if not user_id:
         return jsonify({"logged_in": False})
 
-    user = db_session.session.query(User).get(user_id)
+    user = db_session.session.query(User).filter_by(id=user_id).first()
 
     if user is None:
         session.clear()
         return jsonify({"logged_in": False})
-
-    user_id, email, firstname, lastname, is_admin = user
-
+    
     return jsonify({
         "logged_in": True,
         "user": {
             "id": user_id,
-            "email": email,
-            "firstname": firstname,
-            "lastname": lastname,
-            "is_admin": is_admin
+            "email": user.email,
+            "firstname": user.firstname,
+            "lastname": user.lastname,
+            "is_admin": user.is_admin
         }
     })
