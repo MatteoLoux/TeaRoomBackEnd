@@ -31,6 +31,7 @@ def get_user_info():
             "email": user.email,
             "firstname": user.firstname,
             "lastname": user.lastname,
-            "is_admin": user.is_admin
+            "is_admin": user.is_admin,
+            "photo": user.photo
         }
     })
