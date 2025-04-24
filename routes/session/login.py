@@ -23,7 +23,7 @@ def login():
         cursor.close(); conn.close()
         return jsonify({"success": False, "reason": 0})
 
-    user_id, email, hashed_pw, is_admin, firstname, lastname, n_failures, last_failed, last_login = user
+    user_id, email, hashed_pw, is_admin, n_failures, last_failed, last_login = user
 
     if n_failures >= 3 and last_failed and (now - last_failed) < timedelta(minutes=1):
         cursor.close(); conn.close()
@@ -41,19 +41,12 @@ def login():
         conn.commit(); 
         cursor.close(); 
         conn.close()
-
+        print(user_id,flush=True)
         session['user_id'] = user_id
         session['is_admin'] = is_admin
-        
+
         response = make_response(jsonify({
-            "success": True,
-            "user": {
-                "id": user_id,
-                "email": email,
-                "firstname": firstname,
-                "lastname": lastname,
-                "is_admin": is_admin
-            }
+            "success": True
         }))
 
         return response
