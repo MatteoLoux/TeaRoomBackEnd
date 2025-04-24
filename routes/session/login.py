@@ -40,7 +40,8 @@ def login():
         response = make_response(jsonify({
             "success": True
         }))
-
+        print("👀 Origin:", request.headers.get("Origin"), flush=True)
+        print("👀 Set-Cookie to browser:", response.headers.get("Set-Cookie"), flush=True)      
         return response
 
     except exceptions.VerifyMismatchError:
