@@ -9,7 +9,7 @@ def get_user_info():
     user_id = session.get("user_id")
 
     if not user_id:
-        return jsonify({"error": "Utilisateur non connecté"}), 401
+        return jsonify({"logged_in": False})
 
     conn = get_conn()
     cursor = conn.cursor()
@@ -23,14 +23,17 @@ def get_user_info():
     conn.close()
 
     if user is None:
-        return jsonify({"error": "Utilisateur introuvable"}), 404
+        return jsonify({"logged_in": False})
 
     user_id, email, firstname, lastname, is_admin = user
 
     return jsonify({
-        "id": user_id,
-        "email": email,
-        "firstname": firstname,
-        "lastname": lastname,
-        "is_admin": is_admin
+        "logged_in": True,
+        "user": {
+            "id": user_id,
+            "email": email,
+            "firstname": firstname,
+            "lastname": lastname,
+            "is_admin": is_admin
+        }
     })
