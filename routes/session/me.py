@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 from db import db_session, User
 import jwt
 import os
+import base64
 
 me_routes = Blueprint('me_routes', __name__)
 JWT_SECRET = os.getenv("SECRET_KEY")
@@ -24,6 +25,8 @@ def get_user_info():
     if not user:
         return jsonify({"logged_in": False}), 401
 
+    photo_data = base64.b64encode(user.photo).decode("utf-8")
+    photo_url = f"data:image/jpeg;base64,{photo_data}"
     return jsonify({
         "logged_in": True,
         "user": {
@@ -32,6 +35,6 @@ def get_user_info():
             "firstname": user.firstname,
             "lastname": user.lastname,
             "is_admin": user.is_admin,
-            "photo": user.photo
+            "photo": photo_url
         }
     })
