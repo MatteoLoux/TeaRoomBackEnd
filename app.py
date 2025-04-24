@@ -14,7 +14,7 @@ from routes.goodies import goodies
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True, origins=["https://jnhvanepger556sc.anvil.app/"])
+CORS(app, supports_credentials=True, origins=["https://jnhvanepger556sc.anvil.app/debug/UIONRC4PUM3RXVICJ23J6IBO6SINK25Q%3D3U7A5WDA4LM3KFIJD6I56XXZ"])
 
 # Configuration des sessions avec PostgreSQL
 app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
