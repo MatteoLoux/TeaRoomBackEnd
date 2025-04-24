@@ -1,6 +1,6 @@
 import psycopg2
 import os
-from sqlalchemy import SQLAlchemy
+from flask_sqlalchemy  import SQLAlchemy
 
 
 def get_conn():
