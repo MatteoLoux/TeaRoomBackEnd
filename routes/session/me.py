@@ -1,27 +1,33 @@
-from flask import Blueprint, jsonify, session
+from flask import Blueprint, jsonify, request
 from db import db_session, User
+import jwt
+import os
 
 me_routes = Blueprint('me_routes', __name__)
-
+JWT_SECRET = os.getenv("SECRET_KEY")
 
 @me_routes.route("/me", methods=["GET"])
 def get_user_info():
-    print("DEBUG SESSION:", dict(session), flush=True)
-    user_id = session.get("user_id")
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return jsonify({"logged_in": False}), 401
 
-    if not user_id:
-        return jsonify({"logged_in": False})
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        return jsonify({"logged_in": False, "error": "expired"}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({"logged_in": False, "error": "invalid"}), 401
 
-    user = db_session.session.query(User).filter_by(id=user_id).first()
+    user = db_session.session.query(User).filter_by(id=payload["user_id"]).first()
+    if not user:
+        return jsonify({"logged_in": False}), 401
 
-    if user is None:
-        session.clear()
-        return jsonify({"logged_in": False})
-    
     return jsonify({
         "logged_in": True,
         "user": {
-            "id": user_id,
+            "id": user.id,
             "email": user.email,
             "firstname": user.firstname,
             "lastname": user.lastname,

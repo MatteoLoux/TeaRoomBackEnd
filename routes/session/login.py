@@ -1,11 +1,13 @@
-from flask import Blueprint, request, jsonify, session, make_response
+from flask import Blueprint, request, jsonify
 from argon2 import PasswordHasher, exceptions
 from datetime import datetime, timedelta, timezone
+import jwt
+import os
 
 from db import db_session, User
 
 login_routes = Blueprint('login_routes', __name__)
-
+JWT_SECRET = os.getenv("SECRET_KEY")  # Utilisé pour signer le token
 
 @login_routes.route("/login", methods=["POST"])
 def login():
@@ -20,32 +22,42 @@ def login():
         return jsonify({"success": False, "reason": 0})
 
     if user.n_password_failures >= 3 and user.last_failed and (now - user.last_failed) < timedelta(minutes=1):
-        return jsonify({"success": False, "reason": 1}) # Compte bloqué temporairement
+        return jsonify({"success": False, "reason": 1})  # bloqué
 
     ph = PasswordHasher()
     try:
         ph.verify(user.password, password)
-        
-        #mdp correct
+
         user.n_password_failures = 0
         user.last_failed = None
         user.last_login = now
         db_session.session.commit()
-        
-        session.clear()
-        session['user_id'] = user.id
-        session['is_admin'] = user.is_admin
-        session.permanent = True
-        print(session,flush=True)
-        response = jsonify({
-            "success": True
+
+        # Générer un token JWT
+        token = jwt.encode(
+            {
+                "user_id": user.id,
+                "is_admin": user.is_admin,
+                "exp": datetime.utcnow() + timedelta(days=1)
+            },
+            JWT_SECRET,
+            algorithm="HS256"
+        )
+
+        return jsonify({
+            "success": True,
+            "token": token,
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "firstname": user.firstname,
+                "lastname": user.lastname,
+                "is_admin": user.is_admin
+            }
         })
-        print("👀 Origin:", request.headers.get("Origin"), flush=True)
-        print("👀 Set-Cookie to browser:", response.headers.get("Set-Cookie"), flush=True)      
-        return response
 
     except exceptions.VerifyMismatchError:
-        user.n_password_failures +=1
+        user.n_password_failures += 1
         user.last_failed = now
         db_session.session.commit()
         return jsonify({"success": False, "reason": 2, "failures": user.n_password_failures})
