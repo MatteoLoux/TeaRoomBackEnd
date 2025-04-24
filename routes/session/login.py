@@ -44,7 +44,6 @@ def login():
 
         session['user_id'] = user_id
         session['is_admin'] = is_admin
-        print(user_id,flush=True)
         print(session,flush=True)
         response = make_response(jsonify({
             "success": True
