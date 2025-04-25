@@ -31,14 +31,12 @@ def get_cart():
         return jsonify({"cart": None})
 
     return jsonify({
-        "cart": {
-            "id": cart.id,
-            "user_id": cart.user_id,
-            "created_at": cart.created_at.isoformat(),
-            "updated_at": cart.updated_at.isoformat(),
-            "total_amount": float(cart.total_amount),
-            "content": cart.content
-        }
+        "id": cart.id,
+        "user_id": cart.user_id,
+        "created_at": cart.created_at.isoformat(),
+        "updated_at": cart.updated_at.isoformat(),
+        "total_amount": float(cart.total_amount),
+        "content": cart.content
     })
 
 # POST /cart — ajoute un produit dans le panier
