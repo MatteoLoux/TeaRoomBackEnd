@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from db import db_session, User
+from db import db_session, require_jwt,User
 import jwt
 import os
 import base64
@@ -8,25 +8,16 @@ me_routes = Blueprint('me_routes', __name__)
 JWT_SECRET = os.getenv("SECRET_KEY")
 
 @me_routes.route("/me", methods=["GET"])
+@require_jwt
 def get_user_info():
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        return jsonify({"logged_in": False}), 401
-
-    token = auth_header.split(" ")[1]
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-    except jwt.ExpiredSignatureError:
-        return jsonify({"logged_in": False, "error": "expired"}), 401
-    except jwt.InvalidTokenError:
-        return jsonify({"logged_in": False, "error": "invalid"}), 401
-
-    user = db_session.session.query(User).filter_by(id=payload["user_id"]).first()
+    user = db_session.session.query(User).filter_by(id=request.user_id).first()
     if not user:
         return jsonify({"logged_in": False}), 401
 
-    photo_data = base64.b64encode(user.photo).decode("utf-8")
-    photo_url = f"data:image/jpeg;base64,{photo_data}"
+    photo_url = None
+    if user.photo:
+        photo_data = base64.b64encode(user.photo).decode("utf-8")
+        photo_url = f"data:image/jpeg;base64,{photo_data}"
     return jsonify({
         "logged_in": True,
         "user": {

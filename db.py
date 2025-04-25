@@ -1,9 +1,37 @@
-import psycopg2
+from flask import request, jsonify
+import jwt
 import os
+from functools import wraps
 from flask_sqlalchemy  import SQLAlchemy
 from sqlalchemy.sql import func
 
 db_session = SQLAlchemy()
+
+
+JWT_SECRET = os.getenv("SECRET_KEY")
+
+def require_jwt(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Authorization header missing"}), 401
+
+        token = auth_header.split(" ")[1]
+        try:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token expired"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Invalid token"}), 401
+
+        request.user_id = payload["user_id"]
+        request.is_admin = payload.get("is_admin", False)
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
 
 class User(db_session.Model):
     __tablename__ = 'users'
