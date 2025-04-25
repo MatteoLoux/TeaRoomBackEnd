@@ -21,7 +21,7 @@ def get_total_amount(content):
     return round(total, 2)
 
 # GET /cart — retourne le panier complet de l'utilisateur
-@cart_crud.route("/", methods=["GET"])
+@cart_crud.route("/", methods=["GET"], strict_slashes=False)
 @require_jwt
 def get_cart():
     user_id = request.user_id
@@ -42,7 +42,7 @@ def get_cart():
     })
 
 # POST /cart — ajoute un produit dans le panier
-@cart_crud.route("/", methods=["POST"])
+@cart_crud.route("/", methods=["POST"], strict_slashes=False)
 @require_jwt
 def add_to_cart():
     data = request.get_json()
@@ -134,7 +134,7 @@ def remove_product_from_cart(product_id):
     return jsonify({"success": True})
 
 # DELETE /cart — vide complètement le panier
-@cart_crud.route("/", methods=["DELETE"])
+@cart_crud.route("/", methods=["DELETE"], strict_slashes=False)
 @require_jwt
 def clear_cart():
     user_id = request.user_id

@@ -7,7 +7,7 @@ from datetime import datetime
 teas_crud = Blueprint("teas_crud", __name__)
 
 # GET /teas — route publique
-@teas_crud.route("/", methods=["GET"])
+@teas_crud.route("/", methods=["GET"], strict_slashes=False)
 def list_teas():
     teas = Tea.query.all()
     return jsonify([

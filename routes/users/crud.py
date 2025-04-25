@@ -8,7 +8,7 @@ from sqlalchemy import func
 users_crud = Blueprint('users_crud', __name__)
 
 # GET /users — admin uniquement
-@users_crud.route("/", methods=["GET"])
+@users_crud.route("/", methods=["GET"], strict_slashes=False)
 @require_jwt
 def list_users():
     if not request.is_admin:
@@ -28,11 +28,11 @@ def list_users():
         } for u in users
     ])
 
-# GET /users/<int:user_id> — autorisé à tous
+# GET /users/<int:user_id> — autorisé aux utilisateurs connectés
 @users_crud.route("/<int:user_id>", methods=["GET"])
 @require_jwt
 def get_user(user_id):
-    if user_id != request.user_id and not request.is_admin:
+    if user_id != request.user_id or not request.is_admin:
         return jsonify({"error": "Accès interdit"}), 403
 
     user = User.query.get(user_id)
@@ -51,7 +51,7 @@ def get_user(user_id):
     })
 
 # POST /users — création admin uniquement
-@users_crud.route("/", methods=["POST"])
+@users_crud.route("/", methods=["POST"], strict_slashes=False)
 @require_jwt
 def create_user():
     if not request.is_admin:

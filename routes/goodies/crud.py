@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 goodies_crud = Blueprint("goodies_crud", __name__)
 
 # GET /goodies — route publique
-@goodies_crud.route("/", methods=["GET"])
+@goodies_crud.route("/", methods=["GET"], strict_slashes=False)
 def list_goodies():
     goodies = Goodie.query.all()
     return jsonify([
