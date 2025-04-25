@@ -103,12 +103,18 @@ def update_cart_quantity(product_id):
     content = cart.content or []
     old_quantity = 0
 
+    # Créer une nouvelle liste pour le contenu
+    new_content = []
+    
     for item in content:
         if item["product_id"] == product_id:
             old_quantity = item["quantity"]
-            item["quantity"] = new_quantity
+            # Ajouter l'élément modifié à la nouvelle liste
+            new_content.append({"product_id": product_id, "quantity": new_quantity})
             found = True
-            break
+        else:
+            # Ajouter les autres éléments inchangés
+            new_content.append(item)
 
     if not found:
         return jsonify({"success": False, "message": "Produit non trouvé dans le panier"}), 404
@@ -124,10 +130,14 @@ def update_cart_quantity(product_id):
         quantity_diff = old_quantity - new_quantity
         product.quantity += quantity_diff
 
-    cart.content = content
+    # Assigner explicitement la nouvelle liste pour forcer la détection des changements
+    cart.content = new_content
     cart.updated_at = datetime.now(timezone.utc)
-    cart.total_amount = get_total_amount(content)
+    cart.total_amount = get_total_amount(new_content)
 
+    # Débogage: affichage pour confirmer
+    print(f"Mise à jour du panier: {cart.content}")
+    
     db_session.session.commit()
     return jsonify({"success": True})
 
