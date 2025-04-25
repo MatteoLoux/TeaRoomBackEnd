@@ -32,12 +32,8 @@ with app.app_context():
     db_session.create_all()
 
 # Enregistrement des blueprints
-app.register_blueprint(users, url_prefix="/users")
 app.register_blueprint(users_crud, url_prefix="/users")
-app.register_blueprint(cart, url_prefix="/cart")
 app.register_blueprint(session, url_prefix="/session")
-app.register_blueprint(teas, url_prefix="/teas")
-app.register_blueprint(goodies, url_prefix="/goodies")
 app.register_blueprint(cart_crud, url_prefix="/cart")
 app.register_blueprint(teas_crud, url_prefix="/teas")
 app.register_blueprint(goodies_crud, url_prefix="/goodies")
@@ -45,7 +41,7 @@ app.register_blueprint(goodies_crud, url_prefix="/goodies")
 
 @app.route("/")
 def index():
-    return {"message": "API Flask est en ligne 🚀"}
+    return {"message": "API Flask est en ligne "}
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
