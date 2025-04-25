@@ -1,7 +1,5 @@
 from flask import Blueprint
+from .crud import teas_crud
 
-teas = Blueprint('teas', __name__)
-
-@teas.route("/")
-def home():
-    return {"message": "Teas controller OK"}
+teas = Blueprint("teas", __name__)
+teas.register_blueprint(teas_crud)

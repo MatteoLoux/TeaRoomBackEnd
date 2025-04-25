@@ -1,7 +1,5 @@
 from flask import Blueprint
+from .crud import goodies_crud
 
-goodies = Blueprint('goodies', __name__)
-
-@goodies.route("/")
-def home():
-    return {"message": "Goodies controller OK"}
+goodies = Blueprint("teas", __name__)
+goodies.register_blueprint(goodies_crud)

@@ -1,7 +1,5 @@
 from flask import Blueprint
+from .crud import cart_crud
 
-cart = Blueprint('cart', __name__)
-
-@cart.route("/")
-def home():
-    return {"message": "Cart controller OK"}
+cart = Blueprint("cart", __name__)
+cart.register_blueprint(cart_crud)
