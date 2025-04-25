@@ -27,7 +27,7 @@ def get_goodie(goodie_id):
 
     goodie = Goodie.query.get(goodie_id)
     if not goodie:
-        return jsonify({"error": "Goodie introuvable"}), 404
+        return jsonify({"error": "Goodie introuvable"})
 
     return jsonify({
         "id": goodie.id,
@@ -61,7 +61,7 @@ def create_goodie():
 
     except IntegrityError:
         db_session.session.rollback()
-        return jsonify({"error": "Nom déjà utilisé"}), 400
+        return jsonify({"error": "Nom déjà utilisé"})
 
 # PUT /goodies/<id> — modification (admin uniquement)
 @goodies_crud.route("/<int:goodie_id>", methods=["PUT"])
@@ -72,8 +72,7 @@ def update_goodie(goodie_id):
 
     goodie = Goodie.query.get(goodie_id)
     if not goodie:
-        return jsonify({"error": "Goodie introuvable"}), 404
-
+        return jsonify({"error": "Goodie introuvable"})
     data = request.get_json()
     goodie.name = data.get("name", goodie.name)
     goodie.description = data.get("description", goodie.description)
@@ -94,7 +93,7 @@ def delete_goodie(goodie_id):
 
     goodie = Goodie.query.get(goodie_id)
     if not goodie:
-        return jsonify({"error": "Goodie introuvable"}), 404
+        return jsonify({"error": "Goodie introuvable"})
 
     db_session.session.delete(goodie)
     db_session.session.commit()

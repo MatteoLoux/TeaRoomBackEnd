@@ -28,7 +28,7 @@ def get_tea(tea_id):
 
     tea = Tea.query.get(tea_id)
     if not tea:
-        return jsonify({"error": "Thé introuvable"}), 404
+        return jsonify({"error": "Thé introuvable"})
 
     return jsonify({
         "id": tea.id,
@@ -62,7 +62,7 @@ def create_tea():
 
     except IntegrityError:
         db_session.session.rollback()
-        return jsonify({"error": "Nom déjà utilisé"}), 400
+        return jsonify({"error": "Nom déjà utilisé"})
 
 # PUT /teas/<id> — modification (admin uniquement)
 @teas_crud.route("/<int:tea_id>", methods=["PUT"])
@@ -73,7 +73,7 @@ def update_tea(tea_id):
 
     tea = Tea.query.get(tea_id)
     if not tea:
-        return jsonify({"error": "Thé introuvable"}), 404
+        return jsonify({"error": "Thé introuvable"})
 
     data = request.get_json()
     tea.name = data.get("name", tea.name)
@@ -95,7 +95,7 @@ def delete_tea(tea_id):
 
     tea = Tea.query.get(tea_id)
     if not tea:
-        return jsonify({"error": "Thé introuvable"}), 404
+        return jsonify({"error": "Thé introuvable"})
 
     db_session.session.delete(tea)
     db_session.session.commit()

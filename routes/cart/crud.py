@@ -53,7 +53,7 @@ def add_to_cart():
         product = Goodie.query.get(product_id)
 
     if product is None or product.quantity < quantity:
-        return jsonify({"success": False, "message": "Produit introuvable ou stock insuffisant"}), 400
+        return jsonify({"success": False, "message": "Produit introuvable ou stock insuffisant"})
 
     cart = Cart.query.filter_by(user_id=user_id).first()
     now = datetime.now(timezone.utc)

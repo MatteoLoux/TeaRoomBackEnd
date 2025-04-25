@@ -38,7 +38,7 @@ def login():
             {
                 "user_id": user.id,
                 "is_admin": user.is_admin,
-                "exp": datetime.now(timezone.utc) + timedelta(days=1)
+                "exp": datetime.now(timezone.utc) + timedelta(hours=1)
             },
             JWT_SECRET,
             algorithm="HS256"
