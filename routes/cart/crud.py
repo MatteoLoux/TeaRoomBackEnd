@@ -88,6 +88,38 @@ def add_to_cart():
     db_session.session.commit()
     return jsonify({"success": True})
 
+@cart_crud.route("/<int:product_id>", methods=["PUT"])
+@require_jwt
+def update_cart_quantity(product_id):
+    data = request.get_json()
+    new_quantity = data.get("quantity")
+    user_id = request.user_id
+
+    cart = Cart.query.filter_by(user_id=user_id).first()
+    if cart is None:
+        return jsonify({"success": False, "message": "Aucun panier trouvé"}), 404
+
+    found = False
+    content = cart.content or []
+
+    for item in content:
+        if item["product_id"] == product_id:
+            old_quantity = item["quantity"]
+            item["quantity"] = new_quantity
+            found = True
+            break
+
+    if not found:
+        return jsonify({"success": False, "message": "Produit non trouvé dans le panier"}), 404
+
+    cart.content = content
+    cart.updated_at = datetime.now(timezone.utc)
+    cart.total_amount = get_total_amount(content)
+
+    db_session.session.commit()
+    return jsonify({"success": True})
+
+
 # DELETE /cart/<product_id> — retire un produit du panier
 @cart_crud.route("/<int:product_id>", methods=["DELETE"])
 @require_jwt
