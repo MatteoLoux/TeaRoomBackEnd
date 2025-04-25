@@ -56,24 +56,37 @@ class User(db_session.Model):
 
     n_password_failures = db_session.Column(db_session.Integer, nullable=False, default=0)
 
+class Cart(db_session.Model):
+    __tablename__ = 'carts'
+
+    id = db_session.Column(db_session.Integer, primary_key=True)
+    created_at = db_session.Column(db_session.DateTime(timezone=False), server_default=func.now(), nullable=False)
+    updated_at = db_session.Column(db_session.DateTime(timezone=False), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    user_id = db_session.Column(db_session.Integer, db_session.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    content = db_session.Column(db_session.JSON, nullable=False)
+    total_amount = db_session.Column(db_session.Numeric(10, 2), nullable=True)
 
 
-    # Optionnel mais recommandé : Intégrer la logique de mot de passe ici
-    # Nécessite d'importer PasswordHasher de argon2
-    # from argon2 import PasswordHasher, exceptions
-    # ph = PasswordHasher()
+class Tea(db_session.Model):
+    __tablename__ = 'teas'
 
-    # def set_password(self, password_plaintext):
-    #     self.password = self.ph.hash(password_plaintext)
+    id = db_session.Column(db_session.Integer, primary_key=True)
+    name = db_session.Column(db_session.String, nullable=False)
+    price = db_session.Column(db_session.Numeric(10, 2), nullable=False)
+    image = db_session.Column(db_session.LargeBinary, nullable=True)
+    description = db_session.Column(db_session.Text, nullable=True)
+    is_available = db_session.Column(db_session.Boolean, nullable=False, default=False)
+    quantity = db_session.Column(db_session.Integer, nullable=False, default=0)
 
-    # def check_password(self, password_plaintext):
-    #     if not self.password: # S'il n'y a pas de hash (ne devrait pas arriver)
-    #         return False
-    #     try:
-    #         return self.ph.verify(self.password, password_plaintext)
-    #     except exceptions.VerifyMismatchError:
-    #         return False
-    #     except Exception as e: # Autres erreurs potentiel Argon2
-    #         # Logguer l'erreur e
-    #         print(f"Argon2 verification error: {e}")
-    #         return False
+
+class Goodie(db_session.Model):
+    __tablename__ = 'goodies'
+
+    id = db_session.Column(db_session.Integer, primary_key=True)
+    name = db_session.Column(db_session.String, nullable=False)
+    price = db_session.Column(db_session.Numeric(10, 2), nullable=False)
+    image = db_session.Column(db_session.LargeBinary, nullable=True)
+    description = db_session.Column(db_session.Text, nullable=True)
+    is_available = db_session.Column(db_session.Boolean, nullable=False, default=False)
+    quantity = db_session.Column(db_session.Integer, nullable=False, default=0)

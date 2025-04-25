@@ -1,11 +1,11 @@
 from flask import Flask
 from flask_cors import CORS
-from flask_session import Session
 from dotenv import load_dotenv
 import os
 
 from db import db_session
 from routes.users import users
+from routes.users.crud import users_crud
 from routes.cart import cart
 from routes.session import session
 from routes.teas import teas
@@ -14,26 +14,23 @@ from routes.goodies import goodies
 load_dotenv()
 
 app = Flask(__name__)
+
+# CORS autorisé pour ton app Anvil uniquement (avec envoi d'en-tête Authorization)
 anvil_app_origin = "https://jnhvanepger556sc.anvil.app"
 CORS(app, supports_credentials=True, origins=[anvil_app_origin])
 
-# Configuration des sessions avec PostgreSQL
+# Configuration de base
 app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
-app.config['SESSION_TYPE'] = 'sqlalchemy'
-app.config['SESSION_SQLALCHEMY'] = db_session
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SECURE'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'None'
 
-
+# Initialisation de SQLAlchemy
 db_session.init_app(app)
 with app.app_context():
     db_session.create_all()
-Session(app)
 
-# Blueprints enregistrés
+# Enregistrement des blueprints
 app.register_blueprint(users, url_prefix="/users")
+app.register_blueprint(users_crud, url_prefix="/users")
 app.register_blueprint(cart, url_prefix="/cart")
 app.register_blueprint(session, url_prefix="/session")
 app.register_blueprint(teas, url_prefix="/teas")
