@@ -101,6 +101,7 @@ def update_cart_quantity(product_id):
 
     found = False
     content = cart.content or []
+    old_quantity = 0
 
     for item in content:
         if item["product_id"] == product_id:
@@ -111,6 +112,17 @@ def update_cart_quantity(product_id):
 
     if not found:
         return jsonify({"success": False, "message": "Produit non trouvé dans le panier"}), 404
+
+    # Récupérer le produit et ajuster le stock
+    product = Tea.query.get(product_id)
+    if product is None:
+        product = Goodie.query.get(product_id)
+
+    if product:
+        # Si new_quantity > old_quantity, on retire du stock
+        # Si new_quantity < old_quantity, on ajoute au stock
+        quantity_diff = old_quantity - new_quantity
+        product.quantity += quantity_diff
 
     cart.content = content
     cart.updated_at = datetime.now(timezone.utc)
