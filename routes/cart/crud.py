@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from datetime import datetime, timezone
 from db import db_session, require_jwt, Cart, Goodie, Tea
 import decimal
+from sqlalchemy.orm.attributes import flag_modified
 
 cart_crud = Blueprint("cart_crud", __name__)
 
@@ -83,7 +84,9 @@ def add_to_cart():
         if not item_found:
             content.append({"product_id": product_id, "quantity": quantity})
 
-        cart.content = content
+        # Forcer la détection de changement en créant une nouvelle liste
+        cart.content = list(content)  # Créer une nouvelle copie pour forcer la détection de modification
+        flag_modified(cart, "content")  # Signaler explicitement que le champ content a été modifié
         cart.updated_at = now
         cart.total_amount = get_total_amount(content)
         print(f"Cart updated: {cart.content}")
