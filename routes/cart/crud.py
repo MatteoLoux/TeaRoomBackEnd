@@ -67,7 +67,10 @@ def add_to_cart():
             updated_at=now,
             total_amount=product.price * quantity
         )
+        # Ajout du debug pour vérifier l'objet cart
+        print(f"Cart created: {cart.user_id}, {cart.content}")
         db_session.session.add(cart)
+        print("Cart added to session")
     else:
         content = cart.content or []
         item_found = False
@@ -83,9 +86,19 @@ def add_to_cart():
         cart.content = content
         cart.updated_at = now
         cart.total_amount = get_total_amount(content)
+        print(f"Cart updated: {cart.content}")
 
     product.quantity -= quantity
-    db_session.session.commit()
+    
+    try:
+        # Forcer le commit et capturer les erreurs potentielles
+        db_session.session.commit()
+        print("Transaction committed successfully")
+    except Exception as e:
+        db_session.session.rollback()
+        print(f"Error in commit: {str(e)}")
+        return jsonify({"success": False, "message": f"Erreur de base de données: {str(e)}"}), 500
+        
     return jsonify({"success": True})
 
 @cart_crud.route("/<int:product_id>", methods=["PUT"])
