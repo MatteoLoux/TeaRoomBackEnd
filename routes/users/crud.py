@@ -92,8 +92,20 @@ def update_user(user_id):
     user.lastname = data.get("lastname", user.lastname)
     user.email = data.get("email", user.email)
     user.is_admin = data.get("is_admin", user.is_admin)
+    
+    # Vérifier si photo existe et n'est pas None
     if data.get("photo"):
-        user.photo = base64.b64decode(data["photo"].split(",")[1])
+        try:
+            # Vérifier si la photo est au format attendu (data URL)
+            if isinstance(data["photo"], str) and "," in data["photo"]:
+                # Extraire la partie base64 après la virgule
+                user.photo = base64.b64decode(data["photo"].split(",")[1])
+            elif isinstance(data["photo"], str):
+                # Essayer de décoder directement si c'est une chaîne sans format data URL
+                user.photo = base64.b64decode(data["photo"])
+        except Exception as e:
+            print(f"Erreur lors du traitement de la photo: {e}")
+            # Continuer sans modifier la photo en cas d'erreur
 
     db_session.session.commit()
     return jsonify({"message": "Utilisateur mis à jour"})
