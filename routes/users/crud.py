@@ -96,30 +96,57 @@ def update_user(user_id):
     user.is_admin = data.get("is_admin", user.is_admin)
     
     # Vérifier si photo existe et n'est pas None
-    if data.get("photo"):
+    if data.get("photo") is not None:
         print(f"Photo trouvée dans les données: {type(data['photo'])}")
-        print(f"Longueur de la photo: {len(data['photo'])}")
-        print(f"Début de la chaîne photo: {data['photo'][:50]}...")
         
         try:
-            # Vérifier si la photo est au format attendu (data URL)
-            if isinstance(data["photo"], str) and "," in data["photo"]:
-                print("Photo au format data URL, extraction de la partie base64")
-                # Extraire la partie base64 après la virgule
-                base64_part = data["photo"].split(",")[1]
-                print(f"Longueur de la partie base64: {len(base64_part)}")
-                user.photo = base64.b64decode(base64_part)
-                print(f"Photo décodée, taille: {len(user.photo) if user.photo else 0} bytes")
+            # Cas 1: La photo est None (suppression de la photo)
+            if data['photo'] is None:
+                print("Suppression de la photo")
+                user.photo = None
+            
+            # Cas 2: La photo est une chaîne (format data URL ou base64)
             elif isinstance(data["photo"], str):
-                print("Photo au format chaîne simple, décodage direct")
-                # Essayer de décoder directement si c'est une chaîne sans format data URL
-                user.photo = base64.b64decode(data["photo"])
-                print(f"Photo décodée, taille: {len(user.photo) if user.photo else 0} bytes")
+                print(f"Photo est une chaîne de longueur {len(data['photo'])}")
+                
+                if "," in data["photo"]:
+                    print("Format data URL détecté, extraction partie base64")
+                    base64_part = data["photo"].split(",")[1]
+                    user.photo = base64.b64decode(base64_part)
+                else:
+                    print("Décodage direct de la chaîne base64")
+                    user.photo = base64.b64decode(data["photo"])
+            
+            # Cas 3: Tableau d'octets reçu directement (bytes ou list)
+            elif isinstance(data["photo"], (list, bytes)):
+                print(f"Photo est un tableau d'octets de longueur {len(data['photo'])}")
+                
+                # Si c'est une liste d'entiers (octets), la convertir en bytes
+                if isinstance(data["photo"], list):
+                    # Vérifier que tous les éléments sont des entiers entre 0 et 255
+                    if all(isinstance(b, int) and 0 <= b <= 255 for b in data["photo"]):
+                        print("Conversion de la liste d'octets en bytes")
+                        user.photo = bytes(data["photo"])
+                    else:
+                        print("Format de liste invalide pour une photo")
+                        raise ValueError("Format de liste invalide pour une photo")
+                else:
+                    # Déjà au format bytes
+                    user.photo = data["photo"]
+            
+            # Cas 4: Format inconnu
             else:
-                print(f"Format de photo non pris en charge: {type(data['photo'])}")
+                print(f"Format de photo non reconnu: {type(data['photo'])}")
+                raise ValueError(f"Format de photo non pris en charge: {type(data['photo'])}")
+            
+            if user.photo:
+                print(f"Photo traitée avec succès: {len(user.photo)} bytes")
+            else:
+                print("Photo supprimée ou non définie")
+                
         except Exception as e:
             print(f"Erreur lors du traitement de la photo: {e}")
-            # Continuer sans modifier la photo en cas d'erreur
+            return jsonify({"error": f"Erreur lors du traitement de la photo: {str(e)}"}), 400
     else:
         print("Aucune photo trouvée dans les données")
         
