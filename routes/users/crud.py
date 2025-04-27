@@ -1,9 +1,10 @@
 import base64
 from flask import Blueprint, request, jsonify
 from sqlalchemy.exc import IntegrityError
-from db import db_session,require_jwt, User
+from db import db_session,require_jwt, User, JWT_SECRET
 from sqlalchemy import func
 from argon2 import PasswordHasher, exceptions
+import jwt
 
 users_crud = Blueprint('users_crud', __name__)
 
@@ -142,7 +143,6 @@ def verify_password():
         return jsonify({"valid": False})
 
 @users_crud.route("/update-password", methods=["POST", "OPTIONS"], strict_slashes=False)
-@require_jwt
 def update_password():
     """
     POST /users/update-password — Met à jour le mot de passe d'un utilisateur
@@ -151,7 +151,21 @@ def update_password():
     if request.method == "OPTIONS":
         return jsonify({}), 200
         
-    user_id = request.user_id
+    # Vérifier le JWT seulement pour les requêtes POST
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return jsonify({"error": "Authorization header missing"}), 401
+
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        return jsonify({"error": "Token expired"}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({"error": "Invalid token"}), 401
+
+    user_id = payload["user_id"]
+    
     data = request.get_json()
     old_password = data.get("old_password")
     new_password = data.get("new_password")
