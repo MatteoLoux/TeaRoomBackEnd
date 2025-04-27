@@ -88,6 +88,8 @@ def update_user(user_id):
         return jsonify({"error": "Utilisateur non trouvé"}), 404
 
     data = request.get_json()
+    print(f"Données reçues pour update_user: {list(data.keys())}")
+    
     user.firstname = data.get("firstname", user.firstname)
     user.lastname = data.get("lastname", user.lastname)
     user.email = data.get("email", user.email)
@@ -95,20 +97,41 @@ def update_user(user_id):
     
     # Vérifier si photo existe et n'est pas None
     if data.get("photo"):
+        print(f"Photo trouvée dans les données: {type(data['photo'])}")
+        print(f"Longueur de la photo: {len(data['photo'])}")
+        print(f"Début de la chaîne photo: {data['photo'][:50]}...")
+        
         try:
             # Vérifier si la photo est au format attendu (data URL)
             if isinstance(data["photo"], str) and "," in data["photo"]:
+                print("Photo au format data URL, extraction de la partie base64")
                 # Extraire la partie base64 après la virgule
-                user.photo = base64.b64decode(data["photo"].split(",")[1])
+                base64_part = data["photo"].split(",")[1]
+                print(f"Longueur de la partie base64: {len(base64_part)}")
+                user.photo = base64.b64decode(base64_part)
+                print(f"Photo décodée, taille: {len(user.photo) if user.photo else 0} bytes")
             elif isinstance(data["photo"], str):
+                print("Photo au format chaîne simple, décodage direct")
                 # Essayer de décoder directement si c'est une chaîne sans format data URL
                 user.photo = base64.b64decode(data["photo"])
+                print(f"Photo décodée, taille: {len(user.photo) if user.photo else 0} bytes")
+            else:
+                print(f"Format de photo non pris en charge: {type(data['photo'])}")
         except Exception as e:
             print(f"Erreur lors du traitement de la photo: {e}")
             # Continuer sans modifier la photo en cas d'erreur
-
-    db_session.session.commit()
-    return jsonify({"message": "Utilisateur mis à jour"})
+    else:
+        print("Aucune photo trouvée dans les données")
+        
+    try:
+        # Commit explicite
+        db_session.session.commit()
+        print("Commit réussi, utilisateur mis à jour")
+        return jsonify({"message": "Utilisateur mis à jour"})
+    except Exception as e:
+        db_session.session.rollback()
+        print(f"Erreur lors du commit: {e}")
+        return jsonify({"error": f"Erreur lors de la mise à jour: {str(e)}"}), 500
 
 # DELETE /users/<id> — admin uniquement
 @users_crud.route("/<int:user_id>", methods=["DELETE"])
