@@ -112,11 +112,15 @@ def delete_user(user_id):
     db_session.session.commit()
     return jsonify({"message": "Utilisateur supprimé"})
 
-@users_crud.route("/verify-password", methods=["POST"], strict_slashes=False)
+@users_crud.route("/verify-password", methods=["POST", "OPTIONS"], strict_slashes=False)
 def verify_password():
     """
     POST /users/verify-password — Vérifie si le mot de passe est correct pour un utilisateur donné
     """
+    # Gérer les requêtes OPTIONS pour CORS
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+        
     data = request.get_json()
     email = data.get("email")
     password = data.get("password")
@@ -136,3 +140,38 @@ def verify_password():
         return jsonify({"valid": True})
     except exceptions.VerifyMismatchError:
         return jsonify({"valid": False})
+
+@users_crud.route("/update-password", methods=["POST", "OPTIONS"], strict_slashes=False)
+@require_jwt
+def update_password():
+    """
+    POST /users/update-password — Met à jour le mot de passe d'un utilisateur
+    """
+    # Gérer les requêtes OPTIONS pour CORS
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+        
+    user_id = request.user_id
+    data = request.get_json()
+    old_password = data.get("old_password")
+    new_password = data.get("new_password")
+    
+    if not old_password or not new_password:
+        return jsonify({"success": False, "message": "Champs manquants"}), 400
+        
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"success": False, "message": "Utilisateur introuvable"}), 404
+        
+    # Vérifier l'ancien mot de passe
+    ph = PasswordHasher()
+    try:
+        ph.verify(user.password, old_password)
+        
+        # Hasher et sauvegarder le nouveau mot de passe
+        user.password = ph.hash(new_password)
+        db_session.session.commit()
+        
+        return jsonify({"success": True, "message": "Mot de passe mis à jour"})
+    except exceptions.VerifyMismatchError:
+        return jsonify({"success": False, "message": "Ancien mot de passe incorrect"}), 400
