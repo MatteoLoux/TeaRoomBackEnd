@@ -160,8 +160,24 @@ def update_user(user_id):
                         user.photo = base64.b64decode(data_value)
                     else:
                         raise ValueError(f"Format de data_value non supporté: {type(data_value)}")
+                # Nouveau cas: dictionnaire avec clés numériques (tableau d'octets serialisé en JSON)
+                elif all(k.isdigit() for k in photo_data.keys()):
+                    print("Dictionnaire avec clés numériques détecté (tableau d'octets serialisé)", flush=True)
+                    try:
+                        # Convertir le dictionnaire en liste ordonnée
+                        byte_list = [photo_data[str(i)] for i in range(len(photo_data))]
+                        print(f"Liste créée avec {len(byte_list)} éléments", flush=True)
+                        if len(byte_list) < 100:
+                            print(f"Échantillon: {byte_list[:20]}", flush=True)
+                        
+                        # Convertir en bytes
+                        user.photo = bytes(byte_list)
+                        print(f"Conversion réussie en {len(user.photo)} bytes", flush=True)
+                    except Exception as e:
+                        print(f"Erreur lors de la conversion du dictionnaire en bytes: {e}", flush=True)
+                        raise ValueError("Impossible de convertir le dictionnaire en bytes")
                 else:
-                    raise ValueError("Dict photo sans clé 'data'")
+                    raise ValueError("Dict photo sans clé 'data' ni structure d'indices numériques")
             
             # Cas 5: Format inconnu
             else:
