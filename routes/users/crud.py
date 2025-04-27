@@ -3,7 +3,7 @@ from flask import Blueprint, request, jsonify
 from sqlalchemy.exc import IntegrityError
 from db import db_session,require_jwt, User
 from sqlalchemy import func
-
+from argon2 import PasswordHasher, exceptions
 
 users_crud = Blueprint('users_crud', __name__)
 
@@ -101,7 +101,7 @@ def update_user(user_id):
 @users_crud.route("/<int:user_id>", methods=["DELETE"])
 @require_jwt
 def delete_user(user_id):
-    if not request.is_admin:
+    if not request.is_admin or user_id != request.user_id:
         return jsonify({"error": "Accès interdit"}), 403
 
     user = User.query.get(user_id)
@@ -111,3 +111,28 @@ def delete_user(user_id):
     db_session.session.delete(user)
     db_session.session.commit()
     return jsonify({"message": "Utilisateur supprimé"})
+
+@users_crud.route("/verify-password", methods=["POST"], strict_slashes=False)
+def verify_password():
+    """
+    POST /users/verify-password — Vérifie si le mot de passe est correct pour un utilisateur donné
+    """
+    data = request.get_json()
+    email = data.get("email")
+    password = data.get("password")
+
+    if not email or not password:
+        return jsonify({"valid": False, "message": "Champs manquants"}), 400
+
+    user = User.query.filter_by(email=email).first()
+
+    if user is None:
+        return jsonify({"valid": False, "message": "Utilisateur introuvable"}), 404
+
+    ph = PasswordHasher()
+
+    try:
+        ph.verify(user.password, password)
+        return jsonify({"valid": True})
+    except exceptions.VerifyMismatchError:
+        return jsonify({"valid": False})

@@ -26,7 +26,7 @@ CORS(app, supports_credentials=True, origins=[anvil_app_origin])
 app.config['SECRET_KEY'] = os.getenv("SECRET_KEY")
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
-app.config['SQLALCHEMY_ECHO'] = True
+app.config['SQLALCHEMY_ECHO'] = False
 
 # Initialisation de SQLAlchemy
 db_session.init_app(app)
