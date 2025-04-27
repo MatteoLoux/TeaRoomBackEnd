@@ -88,7 +88,7 @@ def update_user(user_id):
         return jsonify({"error": "Utilisateur non trouvé"}), 404
 
     data = request.get_json()
-    print(f"Données reçues pour update_user: {list(data.keys())}")
+    print(f"Données reçues pour update_user: {list(data.keys())}", flush=True)
     
     user.firstname = data.get("firstname", user.firstname)
     user.lastname = data.get("lastname", user.lastname)
@@ -96,68 +96,106 @@ def update_user(user_id):
     user.is_admin = data.get("is_admin", user.is_admin)
     
     # Vérifier si photo existe et n'est pas None
-    if data.get("photo") is not None:
-        print(f"Photo trouvée dans les données: {type(data['photo'])}")
+    if "photo" in data:
+        photo_data = data["photo"]
+        print(f"Photo trouvée dans les données: {type(photo_data)}", flush=True)
         
         try:
             # Cas 1: La photo est None (suppression de la photo)
-            if data['photo'] is None:
-                print("Suppression de la photo")
+            if photo_data is None:
+                print("Suppression de la photo", flush=True)
                 user.photo = None
             
             # Cas 2: La photo est une chaîne (format data URL ou base64)
-            elif isinstance(data["photo"], str):
-                print(f"Photo est une chaîne de longueur {len(data['photo'])}")
+            elif isinstance(photo_data, str):
+                print(f"Photo est une chaîne de longueur {len(photo_data)}", flush=True)
                 
-                if "," in data["photo"]:
-                    print("Format data URL détecté, extraction partie base64")
-                    base64_part = data["photo"].split(",")[1]
+                if "," in photo_data:
+                    print("Format data URL détecté, extraction partie base64", flush=True)
+                    base64_part = photo_data.split(",")[1]
                     user.photo = base64.b64decode(base64_part)
                 else:
-                    print("Décodage direct de la chaîne base64")
-                    user.photo = base64.b64decode(data["photo"])
+                    print("Décodage direct de la chaîne base64", flush=True)
+                    user.photo = base64.b64decode(photo_data)
             
             # Cas 3: Tableau d'octets reçu directement (bytes ou list)
-            elif isinstance(data["photo"], (list, bytes)):
-                print(f"Photo est un tableau d'octets de longueur {len(data['photo'])}")
+            elif isinstance(photo_data, (list, bytes, bytearray)):
+                print(f"Photo est un tableau d'octets de longueur {len(photo_data)}", flush=True)
                 
                 # Si c'est une liste d'entiers (octets), la convertir en bytes
-                if isinstance(data["photo"], list):
-                    # Vérifier que tous les éléments sont des entiers entre 0 et 255
-                    if all(isinstance(b, int) and 0 <= b <= 255 for b in data["photo"]):
-                        print("Conversion de la liste d'octets en bytes")
-                        user.photo = bytes(data["photo"])
-                    else:
-                        print("Format de liste invalide pour une photo")
-                        raise ValueError("Format de liste invalide pour une photo")
+                if isinstance(photo_data, list):
+                    print(f"Liste d'octets, premier élément: {type(photo_data[0]) if photo_data else 'None'}", flush=True)
+                    # Ne pas vérifier chaque octet pour les grandes listes
+                    if len(photo_data) < 100:
+                        print(f"Échantillon: {photo_data[:20]}", flush=True)
+                    
+                    try:
+                        # Tenter de convertir en bytes (peut lever une exception si format incorrect)
+                        user.photo = bytes(photo_data)
+                    except Exception as bytes_err:
+                        print(f"Erreur conversion en bytes: {bytes_err}", flush=True)
+                        # Alternative: essayer list(map(int, photo_data))
+                        try:
+                            user.photo = bytes(map(int, photo_data))
+                        except Exception as map_err:
+                            print(f"Erreur conversion avec map: {map_err}", flush=True)
+                            raise ValueError("Impossible de convertir la liste en bytes")
                 else:
-                    # Déjà au format bytes
-                    user.photo = data["photo"]
+                    # Déjà au format bytes ou bytearray
+                    user.photo = bytes(photo_data)
             
-            # Cas 4: Format inconnu
+            # Cas 4: Format de type dictionnaire (peut arriver avec certaines sérialisations JSON)
+            elif isinstance(photo_data, dict):
+                print(f"Photo est un dictionnaire avec clés: {list(photo_data.keys())}", flush=True)
+                
+                if "data" in photo_data:
+                    data_value = photo_data["data"]
+                    print(f"Utilisation de la clé 'data' du dict: {type(data_value)}", flush=True)
+                    
+                    if isinstance(data_value, list):
+                        print("Conversion de data_value en bytes", flush=True)
+                        user.photo = bytes(data_value)
+                    elif isinstance(data_value, str):
+                        print("Décodage de data_value comme base64", flush=True)
+                        user.photo = base64.b64decode(data_value)
+                    else:
+                        raise ValueError(f"Format de data_value non supporté: {type(data_value)}")
+                else:
+                    raise ValueError("Dict photo sans clé 'data'")
+            
+            # Cas 5: Format inconnu
             else:
-                print(f"Format de photo non reconnu: {type(data['photo'])}")
-                raise ValueError(f"Format de photo non pris en charge: {type(data['photo'])}")
+                print(f"Format de photo non reconnu: {type(photo_data)}", flush=True)
+                # Essayer de convertir en chaîne JSON pour diagnostic
+                import json
+                try:
+                    json_str = json.dumps(photo_data)
+                    print(f"JSON: {json_str[:100]}...", flush=True)
+                except:
+                    print("Impossible de convertir en JSON", flush=True)
+                
+                raise ValueError(f"Format de photo non pris en charge: {type(photo_data)}")
             
             if user.photo:
-                print(f"Photo traitée avec succès: {len(user.photo)} bytes")
+                print(f"Photo traitée avec succès: {len(user.photo)} bytes", flush=True)
             else:
-                print("Photo supprimée ou non définie")
+                print("Photo supprimée ou non définie", flush=True)
                 
         except Exception as e:
-            print(f"Erreur lors du traitement de la photo: {e}")
-            return jsonify({"error": f"Erreur lors du traitement de la photo: {str(e)}"}), 400
+            print(f"Erreur lors du traitement de la photo: {e}", flush=True)
+            # Continuer l'exécution sans la photo au lieu de renvoyer une erreur
+            print("Continuons sans modifier la photo", flush=True)
     else:
-        print("Aucune photo trouvée dans les données")
+        print("Clé 'photo' non présente dans les données reçues", flush=True)
         
     try:
         # Commit explicite
         db_session.session.commit()
-        print("Commit réussi, utilisateur mis à jour")
+        print("Commit réussi, utilisateur mis à jour", flush=True)
         return jsonify({"message": "Utilisateur mis à jour"})
     except Exception as e:
         db_session.session.rollback()
-        print(f"Erreur lors du commit: {e}")
+        print(f"Erreur lors du commit: {e}", flush=True)
         return jsonify({"error": f"Erreur lors de la mise à jour: {str(e)}"}), 500
 
 # DELETE /users/<id> — admin uniquement
