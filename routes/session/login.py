@@ -21,8 +21,15 @@ def login():
     if user is None:
         return jsonify({"success": False, "reason": 0})
 
-    if user.n_password_failures >= 3 and user.last_failed and (now - user.last_failed) < timedelta(minutes=1):
-        return jsonify({"success": False, "reason": 1})  # bloqué
+    if user.n_password_failures >= 3 and user.last_failed:
+        # S'assurer que last_failed est timezone-aware (UTC)
+        if user.last_failed.tzinfo is None:
+            last_failed_aware = user.last_failed.replace(tzinfo=timezone.utc)
+        else:
+            last_failed_aware = user.last_failed
+
+        if (now - last_failed_aware) < timedelta(minutes=1):
+            return jsonify({"success": False, "reason": 1})  # bloqué
 
     ph = PasswordHasher()
     try:
