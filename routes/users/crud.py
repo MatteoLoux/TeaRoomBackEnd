@@ -55,54 +55,22 @@ def get_user(user_id):
 @users_crud.route("/", methods=["POST"], strict_slashes=False)
 def create_user():
     data = request.get_json()
+    ph = PasswordHasher()
     try:
         user = User(
             firstname=data["firstname"],
             lastname=data["lastname"],
             email=data["email"],
-            password=data["password"],
+            password=ph.hash(data["password"]),
             is_admin=data.get("is_admin", False),
             photo=None
         )
-        # Vérifier si photo existe et n'est pas None
+
         if "photo" in data:
             photo_data = data["photo"]
-            
-            try:
-                # Cas 1: La photo est None (suppression de la photo)
-                if photo_data is None:
-                    pass
                 
-                # Cas 2: La photo est une chaîne (format data URL ou base64)
-                elif isinstance(photo_data, str):
-                    print("cas 2", flush=True)
-                    if "," in photo_data:
-                        base64_part = photo_data.split(",")[1]
-                        user["photo"] = base64.b64decode(base64_part)
-                    else:
-                        user["photo"] = base64.b64decode(photo_data)
-                
-                # Cas 3: Tableau d'octets reçu directement (bytes ou list)
-                elif isinstance(photo_data, (list, bytes, bytearray)):
-                    print("cas 3", flush=True)
-                    # Si c'est une liste d'entiers (octets), la convertir en bytes
-                    if isinstance(photo_data, list):
-                        try:
-                            # Tenter de convertir en bytes
-                            user["photo"] = bytes(photo_data)
-                        except Exception:
-                            # Alternative: essayer list(map(int, photo_data))
-                            try:
-                                user["photo"] = bytes(map(int, photo_data))
-                            except Exception:
-                                raise ValueError("Impossible de convertir la liste en bytes")
-                    else:
-                        # Déjà au format bytes ou bytearray
-                        user["photo"] = bytes(photo_data)
-                
-                # Cas 4: Format de type dictionnaire (peut arriver avec certaines sérialisations JSON)
-                elif isinstance(photo_data, dict):
-                    print("cas 4", flush=True)
+            if isinstance(photo_data, dict):
+
                     if "data" in photo_data:
                         data_value = photo_data["data"]
                         
@@ -120,14 +88,7 @@ def create_user():
                         user["photo"] = bytes(byte_list)
                     else:
                         raise ValueError("Dict photo sans clé 'data' ni structure d'indices numériques")
-                
-                # Cas 5: Format inconnu
-                else:
-                    raise ValueError(f"Format de photo non pris en charge: {type(photo_data)}")
-                    
-            except Exception:
-                # Continuer l'exécution sans la photo au lieu de renvoyer une erreur
-                pass
+
 
         db_session.session.add(user)
         db_session.session.commit()
@@ -166,7 +127,6 @@ def update_user(user_id):
             
             # Cas 2: La photo est une chaîne (format data URL ou base64)
             elif isinstance(photo_data, str):
-                print("cas 2", flush=True)
                 if "," in photo_data:
                     base64_part = photo_data.split(",")[1]
                     user.photo = base64.b64decode(base64_part)
@@ -175,7 +135,6 @@ def update_user(user_id):
             
             # Cas 3: Tableau d'octets reçu directement (bytes ou list)
             elif isinstance(photo_data, (list, bytes, bytearray)):
-                print("cas 3", flush=True)
                 # Si c'est une liste d'entiers (octets), la convertir en bytes
                 if isinstance(photo_data, list):
                     try:
@@ -193,7 +152,6 @@ def update_user(user_id):
             
             # Cas 4: Format de type dictionnaire (peut arriver avec certaines sérialisations JSON)
             elif isinstance(photo_data, dict):
-                print("cas 4", flush=True)
                 if "data" in photo_data:
                     data_value = photo_data["data"]
                     
