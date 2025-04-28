@@ -168,7 +168,7 @@ def update_user(user_id):
 @users_crud.route("/<int:user_id>", methods=["DELETE"])
 @require_jwt
 def delete_user(user_id):
-    if not request.is_admin or user_id != request.user_id:
+    if not request.is_admin and user_id != request.user_id:
         return jsonify({"error": "Accès interdit"}), 403
 
     user = User.query.get(user_id)
