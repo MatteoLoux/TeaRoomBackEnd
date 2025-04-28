@@ -53,11 +53,7 @@ def get_user(user_id):
 
 # POST /users — création admin uniquement
 @users_crud.route("/", methods=["POST"], strict_slashes=False)
-@require_jwt
 def create_user():
-    if not request.is_admin:
-        return jsonify({"error": "Accès interdit"}), 403
-
     data = request.get_json()
     try:
         user = User(
@@ -74,7 +70,7 @@ def create_user():
 
     except IntegrityError:
         db_session.session.rollback()
-        return jsonify({"error": "Email déjà utilisé"}), 400
+        return jsonify({"error": "Email déjà utilisé"})
 
 # PUT /users/<id> — admin ou soi-même
 @users_crud.route("/<int:user_id>", methods=["PUT"])
