@@ -62,8 +62,73 @@ def create_user():
             email=data["email"],
             password=data["password"],
             is_admin=data.get("is_admin", False),
-            photo=base64.b64decode(data["photo"].split(",")[1]) if data.get("photo") else None
+            photo=None
         )
+        # Vérifier si photo existe et n'est pas None
+        if "photo" in data:
+            photo_data = data["photo"]
+            
+            try:
+                # Cas 1: La photo est None (suppression de la photo)
+                if photo_data is None:
+                    pass
+                
+                # Cas 2: La photo est une chaîne (format data URL ou base64)
+                elif isinstance(photo_data, str):
+                    print("cas 2", flush=True)
+                    if "," in photo_data:
+                        base64_part = photo_data.split(",")[1]
+                        user["photo"] = base64.b64decode(base64_part)
+                    else:
+                        user["photo"] = base64.b64decode(photo_data)
+                
+                # Cas 3: Tableau d'octets reçu directement (bytes ou list)
+                elif isinstance(photo_data, (list, bytes, bytearray)):
+                    print("cas 3", flush=True)
+                    # Si c'est une liste d'entiers (octets), la convertir en bytes
+                    if isinstance(photo_data, list):
+                        try:
+                            # Tenter de convertir en bytes
+                            user["photo"] = bytes(photo_data)
+                        except Exception:
+                            # Alternative: essayer list(map(int, photo_data))
+                            try:
+                                user["photo"] = bytes(map(int, photo_data))
+                            except Exception:
+                                raise ValueError("Impossible de convertir la liste en bytes")
+                    else:
+                        # Déjà au format bytes ou bytearray
+                        user["photo"] = bytes(photo_data)
+                
+                # Cas 4: Format de type dictionnaire (peut arriver avec certaines sérialisations JSON)
+                elif isinstance(photo_data, dict):
+                    print("cas 4", flush=True)
+                    if "data" in photo_data:
+                        data_value = photo_data["data"]
+                        
+                        if isinstance(data_value, list):
+                            user["photo"] = bytes(data_value)
+                        elif isinstance(data_value, str):
+                            user["photo"] = base64.b64decode(data_value)
+                        else:
+                            raise ValueError(f"Format de data_value non supporté: {type(data_value)}")
+                    # Dictionnaire avec clés numériques (tableau d'octets serialisé en JSON)
+                    elif all(k.isdigit() for k in photo_data.keys()):
+                        # Convertir le dictionnaire en liste ordonnée
+                        byte_list = [photo_data[str(i)] for i in range(len(photo_data))]
+                        # Convertir en bytes
+                        user["photo"] = bytes(byte_list)
+                    else:
+                        raise ValueError("Dict photo sans clé 'data' ni structure d'indices numériques")
+                
+                # Cas 5: Format inconnu
+                else:
+                    raise ValueError(f"Format de photo non pris en charge: {type(photo_data)}")
+                    
+            except Exception:
+                # Continuer l'exécution sans la photo au lieu de renvoyer une erreur
+                pass
+
         db_session.session.add(user)
         db_session.session.commit()
         return jsonify({"id": user.id}), 201
@@ -101,6 +166,7 @@ def update_user(user_id):
             
             # Cas 2: La photo est une chaîne (format data URL ou base64)
             elif isinstance(photo_data, str):
+                print("cas 2", flush=True)
                 if "," in photo_data:
                     base64_part = photo_data.split(",")[1]
                     user.photo = base64.b64decode(base64_part)
@@ -109,6 +175,7 @@ def update_user(user_id):
             
             # Cas 3: Tableau d'octets reçu directement (bytes ou list)
             elif isinstance(photo_data, (list, bytes, bytearray)):
+                print("cas 3", flush=True)
                 # Si c'est une liste d'entiers (octets), la convertir en bytes
                 if isinstance(photo_data, list):
                     try:
@@ -126,6 +193,7 @@ def update_user(user_id):
             
             # Cas 4: Format de type dictionnaire (peut arriver avec certaines sérialisations JSON)
             elif isinstance(photo_data, dict):
+                print("cas 4", flush=True)
                 if "data" in photo_data:
                     data_value = photo_data["data"]
                     
