@@ -415,12 +415,6 @@ def decode_steganography_data(image_bytes):
             if data.get("signature") == "TeaRoom":
                 return data
         
-        # NOUVEAU: Redimensionner l'image si trop grande avant décodage
-        MAX_SIZE = (1200, 1200)
-        if img.width > MAX_SIZE[0] or img.height > MAX_SIZE[1]:
-            print(f"Redimensionnement pour décodage de {img.size} à {MAX_SIZE}", flush=True)
-            img.thumbnail(MAX_SIZE, Image.LANCZOS)
-        
         # Convertir en RGB si nécessaire
         if img.mode != 'RGB':
             img = img.convert('RGB')
@@ -437,8 +431,35 @@ def decode_steganography_data(image_bytes):
         # Chercher le préfixe '10101010'
         start_index = binary_data.find('10101010')
         if start_index >= 0:
+            # Extraire les données après le préfixe
             binary_data = binary_data[start_index + 8:]
-            # ... continuer le décodage ...
+            
+            # Convertir les bits en caractères
+            # Grouper les bits par paquets de 8
+            bytes_data = []
+            for i in range(0, len(binary_data), 8):
+                if i + 8 <= len(binary_data):
+                    byte = binary_data[i:i+8]
+                    bytes_data.append(int(byte, 2))
+            
+            # Convertir en bytes puis décoder
+            if bytes_data:
+                try:
+                    # Convertir les valeurs numériques en bytes
+                    bytes_array = bytes(bytes_data)
+                    # Décoder comme base64
+                    base64_str = bytes_array.decode('ascii', errors='ignore')
+                    # Décoder le base64 en JSON
+                    json_str = base64.b64decode(base64_str).decode('utf-8', errors='ignore')
+                    # Parser le JSON
+                    data = json.loads(json_str)
+                    
+                    # Vérifier la signature
+                    if data.get("signature") == "TeaRoom":
+                        print(f"Données stéganographiées trouvées: {data}", flush=True)
+                        return data
+                except Exception as e:
+                    print(f"Erreur lors du décodage des bits: {str(e)}", flush=True)
         
         print("Aucune donnée valide trouvée dans les pixels", flush=True)
         return None
