@@ -59,7 +59,6 @@ def get_user(user_id):
         "photo": f"data:image/jpeg;base64,{base64.b64encode(user.photo).decode()}" if user.photo else None
     })
 
-# POST /users — création admin uniquement
 # PUT /users/<id> — admin ou soi-même
 @users_crud.route("/<int:user_id>", methods=["PUT"])
 @require_jwt
@@ -160,103 +159,6 @@ def update_user(user_id):
         db_session.session.rollback()
         return jsonify({"error": f"Erreur lors de la mise à jour: {str(e)}"}), 500
 
-# PUT /users/<id> — admin ou soi-même
-@users_crud.route("/<int:user_id>", methods=["PUT"])
-@require_jwt
-def update_user(user_id):
-    if user_id != request.user_id and not request.is_admin:
-        return jsonify({"error": "Accès interdit"}), 403
-
-    user = User.query.get(user_id)
-    if not user:
-        return jsonify({"error": "Utilisateur non trouvé"}), 404
-
-    data = request.get_json()
-    
-    user.firstname = data.get("firstname", user.firstname)
-    user.lastname = data.get("lastname", user.lastname)
-    user.email = data.get("email", user.email)
-    user.is_admin = data.get("is_admin", user.is_admin)
-    
-    # Vérifier si photo existe et n'est pas None
-    if "photo" in data:
-        photo_data = data["photo"]
-        
-        try:
-            # Cas 1: La photo est None (suppression de la photo)
-            if photo_data is None:
-                user.photo = None
-            
-            # Cas 2: La photo est une chaîne (format data URL ou base64)
-            elif isinstance(photo_data, str):
-                image_bytes = None
-                if "," in photo_data:
-                    base64_part = photo_data.split(",")[1]
-                    image_bytes = base64.b64decode(base64_part)
-                else:
-                    image_bytes = base64.b64decode(photo_data)
-                
-                # Appliquer la stéganographie pour identifier l'utilisateur
-                if image_bytes:
-                    marked_image = encode_steganography_data(image_bytes, user_id, int(time.time()))
-                    user.photo = marked_image
-            
-            # Cas 3: Tableau d'octets reçu directement (bytes ou list)
-            elif isinstance(photo_data, (list, bytes, bytearray)):
-                if isinstance(photo_data, list):
-                    try:
-                        image_bytes = bytes(photo_data)
-                    except Exception:
-                        try:
-                            image_bytes = bytes(map(int, photo_data))
-                        except Exception:
-                            raise ValueError("Impossible de convertir la liste en bytes")
-                else:
-                    image_bytes = bytes(photo_data)
-                
-                # Appliquer la stéganographie pour identifier l'utilisateur
-                if image_bytes:
-                    marked_image = encode_steganography_data(image_bytes, user_id, int(time.time()))
-                    user.photo = marked_image
-            
-            # Cas 4: Format de type dictionnaire (peut arriver avec certaines sérialisations JSON)
-            elif isinstance(photo_data, dict):
-                image_bytes = None
-                if "data" in photo_data:
-                    data_value = photo_data["data"]
-                    
-                    if isinstance(data_value, list):
-                        image_bytes = bytes(data_value)
-                    elif isinstance(data_value, str):
-                        image_bytes = base64.b64decode(data_value)
-                # Dictionnaire avec clés numériques (tableau d'octets serialisé en JSON)
-                elif all(k.isdigit() for k in photo_data.keys()):
-                    # Convertir le dictionnaire en liste ordonnée
-                    byte_list = [photo_data[str(i)] for i in range(len(photo_data))]
-                    # Convertir en bytes
-                    image_bytes = bytes(byte_list)
-                
-                # Appliquer la stéganographie pour identifier l'utilisateur
-                if image_bytes:
-                    marked_image = encode_steganography_data(image_bytes, user_id, int(time.time()))
-                    user.photo = marked_image
-            
-            # Cas 5: Format inconnu
-            else:
-                raise ValueError(f"Format de photo non pris en charge: {type(photo_data)}")
-                
-        except Exception as e:
-            # Continuer l'exécution sans la photo au lieu de renvoyer une erreur
-            print(f"Erreur lors du traitement de la photo: {str(e)}")
-            pass
-            
-    try:
-        # Commit explicite
-        db_session.session.commit()
-        return jsonify({"message": "Utilisateur mis à jour"})
-    except Exception as e:
-        db_session.session.rollback()
-        return jsonify({"error": f"Erreur lors de la mise à jour: {str(e)}"}), 500
 # DELETE /users/<id> — admin uniquement
 @users_crud.route("/<int:user_id>", methods=["DELETE"])
 @require_jwt
@@ -348,7 +250,7 @@ def update_password():
         return jsonify({"success": True, "message": "Mot de passe mis à jour"})
     except exceptions.VerifyMismatchError:
         return jsonify({"success": False, "message": "Ancien mot de passe incorrect"}), 400
-
+    
 def encode_steganography_data(image_bytes, user_id, timestamp=None):
     # Utiliser le timestamp actuel si non fourni
     if timestamp is None:
