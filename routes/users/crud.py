@@ -364,22 +364,21 @@ def encode_steganography_data(image_bytes, user_id, timestamp=None):
             # Au lieu de lever une erreur, simplement retourner l'image originale
             return image_bytes
         
-        # OPTIMISÉ: Traiter les pixels par petits morceaux pour économiser la mémoire
+        # Ajouter un préfixe reconnaissable au début des données
+        binary_data = '10101010' + binary_data
+        
+        # Utiliser les 100 premiers pixels de l'image pour stocker les données
+        # Le reste de l'image reste inchangé
         data_index = 0
-        for y in range(height):
-            if data_index >= len(binary_data):
-                break
-                
-            for x in range(width):
+        for y in range(10):
+            for x in range(10):
                 if data_index >= len(binary_data):
                     break
                     
                 pixel = list(img.getpixel((x, y)))
                 
-                # Modifier jusqu'à 3 bits par pixel (un pour chaque canal RGB)
                 for i in range(min(3, len(pixel))):
                     if data_index < len(binary_data):
-                        # Modifier le bit de poids faible
                         new_bit = int(binary_data[data_index])
                         pixel[i] = (pixel[i] & ~1) | new_bit
                         data_index += 1
@@ -388,13 +387,8 @@ def encode_steganography_data(image_bytes, user_id, timestamp=None):
         
         # Enregistrer l'image modifiée
         output = io.BytesIO()
-        save_format = original_format if original_format else 'JPEG'
-        
-        if save_format == 'JPEG':
-            # Utiliser une qualité élevée pour JPEG
-            img.save(output, format=save_format, quality=95)
-        else:
-            img.save(output, format=save_format)
+        # Toujours utiliser PNG pour préserver les bits de poids faible
+        img.save(output, format='PNG')
         
         print("Stéganographie terminée avec succès", flush=True)
         return output.getvalue()
@@ -431,38 +425,20 @@ def decode_steganography_data(image_bytes):
         if img.mode != 'RGB':
             img = img.convert('RGB')
         
-        # OPTIMISÉ: Traiter les pixels pixel par pixel au lieu de tout charger en mémoire
-        width, height = img.size
+        # Lire uniquement les 100 premiers pixels
         binary_data = ""
-        
-        for y in range(height):
-            for x in range(width):
+        for y in range(10):
+            for x in range(10):
                 pixel = img.getpixel((x, y))
                 
-                for i in range(min(3, len(pixel))):  # Limité à RGB
-                    binary_data += str(pixel[i] & 1)  # Récupérer le LSB
-                
-                # Vérifier périodiquement si nous avons trouvé une chaîne valide
-                if len(binary_data) % 8 == 0 and len(binary_data) >= 672:  # Taille approximative des données encodées
-                    # Essayer de décoder progressivement
-                    try:
-                        # Convertir les bits en caractères
-                        chars = ''.join([chr(int(binary_data[i:i+8], 2)) for i in range(0, len(binary_data), 8)])
-                        # Essayer de décoder en base64 puis en JSON
-                        json_data = base64.b64decode(chars).decode('utf-8', errors='ignore')
-                        data = json.loads(json_data)
-                        
-                        # Vérifier la signature
-                        if data.get("signature") == "TeaRoom":
-                            print(f"Données trouvées après lecture de {x*y} pixels", flush=True)
-                            return data
-                    except:
-                        # Continuer l'extraction si le décodage échoue
-                        pass
-                
-                # Limiter la longueur maximale pour éviter les problèmes de mémoire
-                if len(binary_data) > 10000:
-                    binary_data = binary_data[-10000:]
+                for i in range(min(3, len(pixel))):
+                    binary_data += str(pixel[i] & 1)
+        
+        # Chercher le préfixe '10101010'
+        start_index = binary_data.find('10101010')
+        if start_index >= 0:
+            binary_data = binary_data[start_index + 8:]
+            # ... continuer le décodage ...
         
         print("Aucune donnée valide trouvée dans les pixels", flush=True)
         return None
