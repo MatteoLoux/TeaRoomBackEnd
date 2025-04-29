@@ -135,54 +135,93 @@ def update_user(user_id):
     if not user:
         return jsonify({"error": "Utilisateur non trouvé"}), 404
 
-    data = request.get_json()
-    
-    user.firstname = data.get("firstname", user.firstname)
-    user.lastname = data.get("lastname", user.lastname)
-    user.email = data.get("email", user.email)
-    user.is_admin = data.get("is_admin", user.is_admin)
-    
-    # Vérifier si photo existe et n'est pas None
-    if "photo" in data:
-        photo_data = data["photo"]
-        image_bytes = None  # Initialisation de image_bytes
-        
-        try:
-            # Format Anvil: bytes directs depuis file.get_bytes()
-            if isinstance(photo_data, bytes):
-                image_bytes = photo_data
-            # Format de type dictionnaire (peut arriver avec certaines sérialisations JSON)
-            elif isinstance(photo_data, dict):
-                if "data" in photo_data:
-                    data_value = photo_data["data"]
-                    
-                    if isinstance(data_value, list):
-                        image_bytes = bytes(data_value)
-                    elif isinstance(data_value, str):
-                        image_bytes = base64.b64decode(data_value)
-                # Dictionnaire avec clés numériques (tableau d'octets serialisé en JSON)
-                elif all(k.isdigit() for k in photo_data.keys()):
-                    # Convertir le dictionnaire en liste ordonnée
-                    byte_list = [photo_data[str(i)] for i in range(len(photo_data))]
-                    # Convertir en bytes
-                    image_bytes = bytes(byte_list)
-
-            # Appliquer la stéganographie pour identifier l'utilisateur
-            if image_bytes:
-                marked_image = encode_steganography_data(image_bytes, user_id, int(time.time()))
-                user.photo = marked_image
-                
-        except Exception as e:
-            # Continuer l'exécution sans la photo au lieu de renvoyer une erreur
-            print(f"Erreur lors du traitement de la photo: {str(e)}",flush=True)
-            pass
-            
     try:
+        data = request.get_json()
+        print(f"Mise à jour de l'utilisateur {user_id}, données reçues: {str(data.keys())}", flush=True)
+        
+        user.firstname = data.get("firstname", user.firstname)
+        user.lastname = data.get("lastname", user.lastname)
+        user.email = data.get("email", user.email)
+        user.is_admin = data.get("is_admin", user.is_admin)
+        
+        # Vérifier si photo existe et n'est pas None
+        if "photo" in data:
+            photo_data = data["photo"]
+            image_bytes = None  # Initialisation de image_bytes
+            
+            try:
+                print(f"Traitement de la photo pour l'utilisateur {user_id}, type: {type(photo_data)}", flush=True)
+                
+                # Cas 1: La photo est None (suppression de la photo)
+                if photo_data is None:
+                    print(f"Suppression de la photo pour l'utilisateur {user_id}", flush=True)
+                    user.photo = None
+                # Format Anvil: bytes directs depuis file.get_bytes()
+                elif isinstance(photo_data, bytes):
+                    print(f"Photo au format bytes, taille: {len(photo_data)}", flush=True)
+                    image_bytes = photo_data
+                # Format de type dictionnaire (peut arriver avec certaines sérialisations JSON)
+                elif isinstance(photo_data, dict):
+                    print(f"Photo au format dictionnaire, clés: {photo_data.keys()}", flush=True)
+                    if "data" in photo_data:
+                        data_value = photo_data["data"]
+                        
+                        if isinstance(data_value, list):
+                            print("Conversion liste en bytes", flush=True)
+                            image_bytes = bytes(data_value)
+                        elif isinstance(data_value, str):
+                            print("Décodage base64", flush=True)
+                            image_bytes = base64.b64decode(data_value)
+                    # Dictionnaire avec clés numériques (tableau d'octets serialisé en JSON)
+                    elif all(k.isdigit() for k in photo_data.keys()):
+                        print("Conversion dictionnaire numérique en bytes", flush=True)
+                        # Convertir le dictionnaire en liste ordonnée
+                        byte_list = [photo_data[str(i)] for i in range(len(photo_data))]
+                        # Convertir en bytes
+                        image_bytes = bytes(byte_list)
+                # Si c'est une string, essayer de décoder en base64
+                elif isinstance(photo_data, str):
+                    print("Photo reçue comme string, tentative de décodage base64", flush=True)
+                    # Si ça commence par data:image, extraire la partie base64
+                    if photo_data.startswith('data:image'):
+                        base64_data = photo_data.split(',')[1]
+                        image_bytes = base64.b64decode(base64_data)
+                    else:
+                        # Sinon essayer de décoder directement
+                        image_bytes = base64.b64decode(photo_data)
+
+                # Appliquer la stéganographie pour identifier l'utilisateur
+                if image_bytes:
+                    print(f"Application de la stéganographie, taille de l'image: {len(image_bytes)}", flush=True)
+                    try:
+                        # Vérifier que l'image peut être ouverte
+                        test_img = Image.open(io.BytesIO(image_bytes))
+                        test_img.close()
+                        
+                        marked_image = encode_steganography_data(image_bytes, user_id, int(time.time()))
+                        user.photo = marked_image
+                        print("Stéganographie appliquée avec succès", flush=True)
+                    except Exception as e:
+                        print(f"Erreur lors de la stéganographie: {str(e)}", flush=True)
+                        # Sauvegarder l'image sans stéganographie plutôt que d'échouer
+                        user.photo = image_bytes
+                    
+            except Exception as e:
+                # Continuer l'exécution sans la photo au lieu de renvoyer une erreur
+                print(f"Erreur lors du traitement de la photo: {str(e)}", flush=True)
+                import traceback
+                traceback.print_exc()
+                
         # Commit explicite
         db_session.session.commit()
+        print(f"Utilisateur {user_id} mis à jour avec succès", flush=True)
         return jsonify({"message": "Utilisateur mis à jour"})
+        
     except Exception as e:
         db_session.session.rollback()
+        print(f"Erreur globale lors de la mise à jour: {str(e)}", flush=True)
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": f"Erreur lors de la mise à jour: {str(e)}"}), 500
 
 # DELETE /users/<id> — admin uniquement
@@ -282,25 +321,30 @@ def encode_steganography_data(image_bytes, user_id, timestamp=None):
     if timestamp is None:
         timestamp = int(time.time())
     
-    # Créer les données à cacher
-    data = {
-        "user_id": user_id,
-        "timestamp": timestamp,
-        "signature": "TeaRoom"
-    }
-    
-    # Convertir en JSON puis en base64
-    json_data = json.dumps(data)
-    encoded_data = base64.b64encode(json_data.encode()).decode()
-    
-    # Convertir les données en bits
-    binary_data = ''.join(format(ord(char), '08b') for char in encoded_data)
-    
     try:
+        # Créer les données à cacher
+        data = {
+            "user_id": user_id,
+            "timestamp": timestamp,
+            "signature": "TeaRoom"
+        }
+        
+        # Convertir en JSON puis en base64
+        json_data = json.dumps(data)
+        encoded_data = base64.b64encode(json_data.encode()).decode()
+        
+        # Convertir les données en bits
+        binary_data = ''.join(format(ord(char), '08b') for char in encoded_data)
+        
+        print(f"Données à cacher: {json_data} ({len(binary_data)} bits)", flush=True)
+        
+        # Ouvrir l'image et la traiter
         img = Image.open(io.BytesIO(image_bytes))
+        print(f"Image ouverte: {img.format}, {img.size}, {img.mode}", flush=True)
         
         # Convertir en RGB si nécessaire
         if img.mode != 'RGB':
+            print(f"Conversion de {img.mode} vers RGB", flush=True)
             img = img.convert('RGB')
             
         # Vérifier si l'image a suffisamment de pixels pour stocker les données
@@ -308,7 +352,9 @@ def encode_steganography_data(image_bytes, user_id, timestamp=None):
         max_bits = width * height * 3  # 3 canaux (R,G,B) par pixel
         
         if len(binary_data) > max_bits:
-            raise ValueError(f"L'image est trop petite pour cacher les données ({len(binary_data)} bits requis, {max_bits} disponibles)")
+            print(f"Image trop petite: {len(binary_data)} bits > {max_bits} disponibles", flush=True)
+            # Au lieu de lever une erreur, simplement retourner l'image originale
+            return image_bytes
         
         # Obtenir les pixels sous forme de tableau
         pixels = list(img.getdata())
@@ -336,12 +382,18 @@ def encode_steganography_data(image_bytes, user_id, timestamp=None):
         
         # Enregistrer l'image modifiée
         output = io.BytesIO()
-        new_img.save(output, format='PNG')
+        # Préserver le format original si possible
+        save_format = img.format if img.format else 'PNG'
+        new_img.save(output, format=save_format)
         
+        print("Stéganographie terminée avec succès", flush=True)
         return output.getvalue()
+        
     except Exception as e:
         print(f"Erreur lors de l'encodage des pixels: {str(e)}", flush=True)
-        return image_bytes
+        import traceback
+        traceback.print_exc()
+        return image_bytes  # Retourner l'image originale en cas d'erreur
 
 def decode_steganography_data(image_bytes):
     """Récupère les données cachées dans les pixels de l'image"""
