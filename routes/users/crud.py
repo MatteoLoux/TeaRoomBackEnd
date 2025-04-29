@@ -78,10 +78,9 @@ def create_user():
             photo_data = data["photo"]
             image_bytes = None  # Initialisation de image_bytes
             
-            # Cas 1: La photo est None (suppression de la photo)
-            if photo_data is None:
-                pass  # user.photo est déjà None
-            
+            # Format Anvil: bytes directs depuis file.get_bytes()
+            if isinstance(photo_data, bytes):
+                image_bytes = photo_data
             # Format de type dictionnaire (peut arriver avec certaines sérialisations JSON)
             elif isinstance(photo_data, dict):
                 if "data" in photo_data:
@@ -149,10 +148,9 @@ def update_user(user_id):
         image_bytes = None  # Initialisation de image_bytes
         
         try:
-            # Cas 1: La photo est None (suppression de la photo)
-            if photo_data is None:
-                user.photo = None
-            
+            # Format Anvil: bytes directs depuis file.get_bytes()
+            if isinstance(photo_data, bytes):
+                image_bytes = photo_data
             # Format de type dictionnaire (peut arriver avec certaines sérialisations JSON)
             elif isinstance(photo_data, dict):
                 if "data" in photo_data:
