@@ -360,8 +360,15 @@ def get_order_pdf(order_id):
         return jsonify({"error": "Aucun PDF disponible pour cette commande"}), 404
     
     try:
+        # Convertir en bytes si ce n'est pas déjà le bon type
+        pdf_invoice_bytes = bytes(order.pdf_invoice) if hasattr(order.pdf_invoice, '__bytes__') else order.pdf_invoice
+        
+        # Log pour debug
+        print(f"TYPE AVANT CONVERSION: {type(order.pdf_invoice)}", flush=True)
+        print(f"TYPE APRÈS CONVERSION: {type(pdf_invoice_bytes)}", flush=True)
+        
         # Déchiffrer le PDF
-        decrypted_pdf = decrypt_pdf(order.pdf_invoice)
+        decrypted_pdf = decrypt_pdf(pdf_invoice_bytes)
         
         # Créer un objet BytesIO pour renvoyer le PDF
         pdf_buffer = io.BytesIO(decrypted_pdf)
@@ -377,4 +384,6 @@ def get_order_pdf(order_id):
             download_name=filename
         )
     except Exception as e:
+        print(f"ERREUR PDF: {str(e)}", flush=True)
+        traceback.print_exc(file=sys.stdout)
         return jsonify({"error": f"Erreur lors du déchiffrement du PDF: {str(e)}"}), 500
