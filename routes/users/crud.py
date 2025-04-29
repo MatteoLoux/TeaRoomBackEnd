@@ -476,3 +476,42 @@ def verify_photo_metadata(user_id):
     except Exception as e:
         print(f"Erreur lors de l'extraction des métadonnées: {str(e)}",flush=True)
         return jsonify({"error": str(e)}), 200
+
+@users_crud.route("/test-steganography", methods=["GET"])
+def test_steganography():
+    """
+    Route de test pour vérifier que la stéganographie fonctionne
+    """
+    try:
+        # Créer une image test
+        img = Image.new('RGB', (100, 100), color=(255, 255, 255))
+        
+        # Convertir l'image en bytes
+        img_bytes_io = io.BytesIO()
+        img.save(img_bytes_io, format='PNG')
+        img_bytes = img_bytes_io.getvalue()
+        
+        # Données test à encoder
+        test_id = "test_user"
+        test_timestamp = int(time.time())
+        
+        # Encoder les données
+        encoded_bytes = encode_steganography_data(img_bytes, test_id, test_timestamp)
+        
+        # Décoder les données
+        decoded_data = decode_steganography_data(encoded_bytes)
+        
+        # Retourner les résultats
+        return jsonify({
+            "success": decoded_data is not None,
+            "original_data": {
+                "user_id": test_id,
+                "timestamp": test_timestamp
+            },
+            "decoded_data": decoded_data
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        })
