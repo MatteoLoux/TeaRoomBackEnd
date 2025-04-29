@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, send_file
-from db import db_session, require_jwt, Order, User
+from db import db_session, require_jwt, Order, User, Tea, Goodie
 import json
 import io
 import os
@@ -65,10 +65,29 @@ def generate_pdf_from_order(order):
     y = 630
     total = 0
     
-    for item in order.content.get("items", []):
-        name = item.get("name", "Produit inconnu")
-        price = float(item.get("price", 0))
+    # Vérifier si content est une liste directement ou s'il contient une clé 'items'
+    items = []
+    if isinstance(order.content, list):
+        items = order.content
+    elif isinstance(order.content, dict) and "items" in order.content:
+        items = order.content["items"]
+    
+    for item in items:
+        product_id = item.get("product_id")
         quantity = int(item.get("quantity", 1))
+        
+        # Récupérer les détails du produit depuis la base de données
+        product = Tea.query.get(product_id)
+        if not product:
+            product = Goodie.query.get(product_id)
+        
+        if product:
+            name = product.name
+            price = float(product.price)
+        else:
+            name = f"Produit #{product_id}"
+            price = 0
+            
         subtotal = price * quantity
         total += subtotal
         
