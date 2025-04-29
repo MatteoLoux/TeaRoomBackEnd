@@ -41,7 +41,7 @@ def list_users():
 @users_crud.route("/<int:user_id>", methods=["GET"])
 @require_jwt
 def get_user(user_id):
-    if user_id != request.user_id or not request.is_admin:
+    if user_id != request.user_id and not request.is_admin:
         return jsonify({"error": "Accès interdit"}), 403
 
     user = User.query.get(user_id)
