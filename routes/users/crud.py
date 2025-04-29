@@ -552,3 +552,46 @@ def test_steganography():
             "success": False,
             "error": str(e)
         })
+
+# Route pour appliquer la stéganographie à toutes les photos existantes
+@users_crud.route("/apply-steno", methods=["POST"])
+@require_jwt
+def apply_steganography_to_all():
+    """
+    Applique la stéganographie à toutes les photos existantes
+    """
+    if not request.is_admin:
+        return jsonify({"error": "Accès interdit"}), 403
+    
+    print("Début de l'application de stéganographie sur toutes les photos", flush=True)
+    users_with_photos = User.query.filter(User.photo != None).all()
+    processed_count = 0
+    error_count = 0
+    
+    for user in users_with_photos:
+        try:
+            print(f"Traitement de la photo de l'utilisateur {user.id}", flush=True)
+            # Vérifier si des métadonnées existent déjà
+            metadata = decode_steganography_data(user.photo)
+            
+            if not metadata:
+                print(f"Pas de métadonnées trouvées, application de la stéganographie", flush=True)
+                marked_image = encode_steganography_data(user.photo, user.id, int(time.time()))
+                user.photo = marked_image
+                processed_count += 1
+            else:
+                print(f"Métadonnées existantes: {metadata}", flush=True)
+        except Exception as e:
+            error_count += 1
+            print(f"Erreur pour l'utilisateur {user.id}: {str(e)}", flush=True)
+            
+    # Sauvegarder les modifications
+    db_session.session.commit()
+    print(f"Stéganographie appliquée: {processed_count} photos traitées, {error_count} erreurs", flush=True)
+    
+    return jsonify({
+        "success": True,
+        "processed": processed_count,
+        "errors": error_count,
+        "total": len(users_with_photos)
+    })
