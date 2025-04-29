@@ -317,17 +317,7 @@ def update_password():
         return jsonify({"success": False, "message": "Ancien mot de passe incorrect"}), 400
     
 def encode_steganography_data(image_bytes, user_id, timestamp=None):
-    """
-    Cache des métadonnées dans une image en utilisant la technique LSB (Least Significant Bit)
-    
-    Args:
-        image_bytes: Les données binaires de l'image
-        user_id: L'identifiant de l'utilisateur à cacher
-        timestamp: Timestamp de la modification (par défaut: timestamp actuel)
-    
-    Returns:
-        bytes: L'image modifiée avec les données cachées
-    """
+    """Cache des métadonnées dans une image"""
     if timestamp is None:
         timestamp = int(time.time())
     
@@ -335,69 +325,36 @@ def encode_steganography_data(image_bytes, user_id, timestamp=None):
     data = {
         "user_id": user_id,
         "timestamp": timestamp,
-        "signature": "TeaRoom"  # Signature pour vérifier que les données sont valides
+        "signature": "TeaRoom"
     }
     
     # Conversion en JSON puis en base64
     json_data = json.dumps(data)
-    encoded_data = base64.b64encode(json_data.encode()).decode()
-    
-    # Conversion en binaire (8 bits par caractère)
-    binary_data = ''.join([format(ord(c), '08b') for c in encoded_data])
+    encoded_data = base64.b64encode(json_data.encode())
     
     try:
         # Ouvrir l'image
         img = Image.open(io.BytesIO(image_bytes))
         
-        # Convertir en RGB si nécessaire
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-        
-        # Vérifier si l'image est assez grande pour contenir les données
-        width, height = img.size
-        max_bits = width * height * 3  # 3 canaux par pixel
-        
-        if len(binary_data) > max_bits:
-            print(f"Image trop petite pour contenir les données ({len(binary_data)} bits requis)", flush=True)
-            # Si l'image est trop petite, on tronque les données
-            binary_data = binary_data[:max_bits]
-        
-        # Cacher les données dans les bits de poids faible
-        data_index = 0
-        pixels_modified = 0
-        
-        # Ajouter un préfixe reconnaissable
-        marker = "10101010"
-        binary_data = marker + binary_data
-        
-        for y in range(height):
-            for x in range(width):
-                if data_index >= len(binary_data):
-                    break
-                
-                # Récupérer le pixel
-                pixel = list(img.getpixel((x, y)))
-                
-                # Modifier les bits de poids faible pour chaque canal
-                for i in range(3):  # R, G, B
-                    if data_index < len(binary_data):
-                        # Remplacer le bit de poids faible par le bit de nos données
-                        new_bit = int(binary_data[data_index])
-                        pixel[i] = (pixel[i] & ~1) | new_bit  # Met à jour le dernier bit
-                        data_index += 1
-                
-                # Mettre à jour le pixel
-                img.putpixel((x, y), tuple(pixel))
-                pixels_modified += 1
-            
-            if data_index >= len(binary_data):
-                break
-        
-        print(f"Données cachées: {pixels_modified} pixels modifiés sur {width}x{height}", flush=True)
-        
-        # Enregistrer l'image modifiée
+        # Méthode alternative: ajouter les métadonnées comme info dans le PNG
+        # Cette méthode est plus fiable que la stéganographie LSB
         output = io.BytesIO()
-        img.save(output, format='PNG')
+        
+        # Conserver le format original si possible, sinon utiliser PNG
+        if img.format == 'PNG':
+            # Créer les métadonnées PNG
+            metadata = PngInfo()
+            metadata.add_text("TeaRoom", encoded_data.decode('ascii'))
+            img.save(output, format='PNG', pnginfo=metadata)
+        else:
+            # Convertir en PNG pour pouvoir stocker les métadonnées
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            metadata = PngInfo()
+            metadata.add_text("TeaRoom", encoded_data.decode('ascii'))
+            img.save(output, format='PNG', pnginfo=metadata)
+        
+        print(f"Métadonnées ajoutées avec succès", flush=True)
         return output.getvalue()
     
     except Exception as e:
@@ -408,71 +365,27 @@ def encode_steganography_data(image_bytes, user_id, timestamp=None):
         return image_bytes
 
 def decode_steganography_data(image_bytes):
-    """
-    Récupère les données cachées dans les pixels de l'image
-    
-    Args:
-        image_bytes: Les données binaires de l'image
-    
-    Returns:
-        dict: Les métadonnées extraites ou None si aucune donnée valide n'est trouvée
-    """
+    """Récupère les données cachées dans les métadonnées de l'image"""
     try:
         # Ouvrir l'image
         img = Image.open(io.BytesIO(image_bytes))
         print(f"Décodage image: {img.format}, {img.size}, {img.mode}", flush=True)
         
-        # Convertir en RGB si nécessaire
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-        
-        width, height = img.size
-        binary_data = ""
-        
-        # Lire les bits de poids faible
-        for y in range(height):
-            for x in range(width):
-                pixel = img.getpixel((x, y))
-                
-                # Extraire le bit de poids faible de chaque canal
-                for i in range(3):  # R, G, B
-                    binary_data += str(pixel[i] & 1)  # Récupère le dernier bit
-                
-                # Si on a assez de données, on arrête
-                if len(binary_data) > 10000:  # Limite raisonnable
-                    break
-            
-            if len(binary_data) > 10000:
-                break
-        
-        # Rechercher le marqueur de début
-        marker = "10101010"
-        start_index = binary_data.find(marker)
-        
-        if start_index >= 0:
-            # Extraire les données après le marqueur
-            binary_data = binary_data[start_index + len(marker):]
-            
-            # Convertir les bits en caractères
-            bytes_data = ""
-            for i in range(0, len(binary_data), 8):
-                if i + 8 <= len(binary_data):
-                    byte = binary_data[i:i+8]
-                    bytes_data += chr(int(byte, 2))
-            
-            # Décoder le base64 puis le JSON
+        # Vérifier si des métadonnées existent
+        if img.format == 'PNG' and "TeaRoom" in img.info:
             try:
-                json_data = base64.b64decode(bytes_data).decode()
+                encoded_data = img.info["TeaRoom"]
+                json_data = base64.b64decode(encoded_data).decode()
                 data = json.loads(json_data)
                 
                 # Vérifier la signature
                 if data.get("signature") == "TeaRoom":
-                    print(f"Données stéganographiées trouvées: {data}", flush=True)
+                    print(f"Métadonnées trouvées: {data}", flush=True)
                     return data
             except Exception as e:
-                print(f"Erreur lors du décodage: {str(e)}", flush=True)
+                print(f"Erreur lors du décodage des métadonnées: {str(e)}", flush=True)
         
-        print("Aucune donnée valide trouvée dans les pixels", flush=True)
+        print("Aucune métadonnée valide trouvée", flush=True)
         return None
     
     except Exception as e:
