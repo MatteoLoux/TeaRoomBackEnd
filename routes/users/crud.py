@@ -295,110 +295,144 @@ def encode_steganography_data(image_bytes, user_id, timestamp=None):
     # Convertir les données en format binaire
     binary_data = ''.join(format(ord(char), '08b') for char in data_str)
     
-    # Convertir les bytes de l'image en objet PIL
-    img = Image.open(io.BytesIO(image_bytes))
-    
-    # Convertir l'image en tableau NumPy
-    img_array = np.array(img)
-    
-    # Vérifier si l'image a suffisamment d'espace pour cacher les données
-    height, width = img_array.shape[:2]
-    channels = 3 if len(img_array.shape) == 3 else 1
-    max_bytes = (height * width * channels) // 8
-    
-    if len(binary_data) > max_bytes:
-        raise ValueError(f"L'image est trop petite pour cacher ces données. Besoin de {len(binary_data)} bits, disponible: {max_bytes*8} bits")
-    
-    # Ajouter la longueur des données en binaire (32 bits)
-    binary_data_length = format(len(binary_data), '032b')
-    binary_data = binary_data_length + binary_data
-    
-    # Cacher les données dans l'image
-    data_index = 0
-    for i in range(height):
-        for j in range(width):
-            for k in range(channels):
-                if data_index < len(binary_data):
-                    # Modifier le bit le moins significatif
-                    if channels == 1:
-                        # Image en niveaux de gris
-                        pixel_value = img_array[i, j]
-                        # Définir le LSB selon notre donnée binaire
-                        img_array[i, j] = (pixel_value & ~1) | int(binary_data[data_index])
+    try:
+        # Convertir les bytes de l'image en objet PIL
+        img = Image.open(io.BytesIO(image_bytes))
+        
+        # Vérifier si le format est supporté pour la stéganographie (JPG, PNG, etc.)
+        if not hasattr(img, 'format') or img.format not in ['JPEG', 'PNG', 'BMP', 'GIF']:
+            print(f"Format d'image non supporté pour la stéganographie: {getattr(img, 'format', 'Inconnu')}")
+            # Retourner simplement l'image originale si le format n'est pas supporté
+            return image_bytes
+        
+        # Convertir l'image en tableau NumPy
+        img_array = np.array(img)
+        
+        # Vérifier si l'image a une structure valide
+        if len(img_array.shape) < 2:
+            print("Format d'image invalide pour la stéganographie")
+            return image_bytes
+            
+        height, width = img_array.shape[:2]
+        channels = 3 if len(img_array.shape) == 3 else 1
+        max_bytes = (height * width * channels) // 8
+        
+        if len(binary_data) > max_bytes:
+            print(f"L'image est trop petite pour cacher ces données. Besoin de {len(binary_data)} bits, disponible: {max_bytes*8} bits")
+            return image_bytes
+        
+        # Ajouter la longueur des données en binaire (32 bits)
+        binary_data_length = format(len(binary_data), '032b')
+        binary_data = binary_data_length + binary_data
+        
+        # Cacher les données dans l'image
+        data_index = 0
+        for i in range(height):
+            for j in range(width):
+                for k in range(min(channels, 3)):  # Limiter à 3 canaux (RGB) même si RGBA
+                    if data_index < len(binary_data):
+                        # Modifier le bit le moins significatif
+                        if channels == 1:
+                            # Image en niveaux de gris
+                            pixel_value = img_array[i, j]
+                            # Définir le LSB selon notre donnée binaire
+                            img_array[i, j] = (pixel_value & ~1) | int(binary_data[data_index])
+                        else:
+                            # Image RGB/RGBA
+                            pixel_value = img_array[i, j, k]
+                            # Définir le LSB selon notre donnée binaire
+                            img_array[i, j, k] = (pixel_value & ~1) | int(binary_data[data_index])
+                        data_index += 1
                     else:
-                        # Image RGB/RGBA
-                        pixel_value = img_array[i, j, k]
-                        # Définir le LSB selon notre donnée binaire
-                        img_array[i, j, k] = (pixel_value & ~1) | int(binary_data[data_index])
-                    data_index += 1
-                else:
+                        break
+                if data_index >= len(binary_data):
                     break
             if data_index >= len(binary_data):
                 break
-        if data_index >= len(binary_data):
-            break
-    
-    # Convertir le tableau modifié en image
-    modified_img = Image.fromarray(img_array)
-    
-    # Sauvegarder l'image en mémoire
-    output = io.BytesIO()
-    modified_img.save(output, format=img.format)
-    
-    return output.getvalue()
+        
+        # Convertir le tableau modifié en image
+        modified_img = Image.fromarray(img_array)
+        
+        # Sauvegarder l'image en mémoire
+        output = io.BytesIO()
+        save_format = img.format if img.format else 'PNG'
+        modified_img.save(output, format=save_format)
+        
+        return output.getvalue()
+    except Exception as e:
+        print(f"Erreur lors de l'encodage stéganographique: {str(e)}")
+        # En cas d'erreur, retourner l'image originale
+        return image_bytes
 
 def decode_steganography_data(image_bytes):
-    # Convertir les bytes de l'image en objet PIL
-    img = Image.open(io.BytesIO(image_bytes))
-    
-    # Convertir l'image en tableau NumPy
-    img_array = np.array(img)
-    
-    # Récupérer les dimensions de l'image
-    height, width = img_array.shape[:2]
-    channels = 3 if len(img_array.shape) == 3 else 1
-    
-    # Extraire d'abord les 32 premiers bits pour connaître la longueur des données
-    binary_length = ""
-    for i in range(32):
-        row = i // (width * channels)
-        col = (i // channels) % width
-        channel = i % channels
-        
-        if channels == 1:
-            binary_length += str(img_array[row, col] & 1)
-        else:
-            binary_length += str(img_array[row, col, channel] & 1)
-    
-    data_length = int(binary_length, 2)
-    
-    # Extraire les données
-    binary_data = ""
-    for i in range(32, 32 + data_length):
-        row = i // (width * channels)
-        col = (i // channels) % width
-        channel = i % channels
-        
-        if channels == 1:
-            binary_data += str(img_array[row, col] & 1)
-        else:
-            binary_data += str(img_array[row, col, channel] & 1)
-    
-    # Convertir les données binaires en chaîne de caractères
-    chars = []
-    for i in range(0, len(binary_data), 8):
-        byte = binary_data[i:i+8]
-        chars.append(chr(int(byte, 2)))
-    
-    data_str = ''.join(chars)
-    
     try:
-        data = json.loads(data_str)
-        # Vérifier la signature pour s'assurer que c'est bien notre image modifiée
-        if data.get("signature") != "TeaRoom":
+        # Convertir les bytes de l'image en objet PIL
+        img = Image.open(io.BytesIO(image_bytes))
+        
+        # Convertir l'image en tableau NumPy
+        img_array = np.array(img)
+        
+        # Vérifier si l'image a une structure valide
+        if len(img_array.shape) < 2:
+            print("Format d'image invalide pour la stéganographie")
             return None
-        return data
-    except:
+            
+        # Récupérer les dimensions de l'image
+        height, width = img_array.shape[:2]
+        channels = 3 if len(img_array.shape) == 3 else 1
+        
+        # Extraire d'abord les 32 premiers bits pour connaître la longueur des données
+        binary_length = ""
+        for i in range(32):
+            row = i // (width * channels)
+            col = (i // channels) % width
+            channel = i % channels
+            
+            if channels == 1:
+                binary_length += str(img_array[row, col] & 1)
+            else:
+                binary_length += str(img_array[row, col, channel] & 1)
+        
+        data_length = int(binary_length, 2)
+        
+        # Vérifier que la longueur est raisonnable
+        max_bytes = (height * width * channels) // 8
+        if data_length > max_bytes or data_length <= 0:
+            print(f"Longueur de données invalide: {data_length}")
+            return None
+        
+        # Extraire les données
+        binary_data = ""
+        for i in range(32, 32 + data_length):
+            row = i // (width * channels)
+            col = (i // channels) % width
+            channel = i % channels
+            
+            if channels == 1:
+                binary_data += str(img_array[row, col] & 1)
+            else:
+                binary_data += str(img_array[row, col, channel] & 1)
+        
+        # Convertir les données binaires en chaîne de caractères
+        chars = []
+        for i in range(0, len(binary_data), 8):
+            if i + 8 <= len(binary_data):
+                byte = binary_data[i:i+8]
+                chars.append(chr(int(byte, 2)))
+        
+        data_str = ''.join(chars)
+        
+        try:
+            data = json.loads(data_str)
+            # Vérifier la signature pour s'assurer que c'est bien notre image modifiée
+            if data.get("signature") != "TeaRoom":
+                return None
+            return data
+        except json.JSONDecodeError:
+            print("Impossible de décoder les données JSON")
+            return None
+    except Exception as e:
+        print(f"Erreur lors du décodage stéganographique: {str(e)}")
         return None
     
 # Fonction utilitaire pour extraire les informations de la photo
