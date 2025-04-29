@@ -153,6 +153,8 @@ def create_order():
         db_session.session.flush()  # Pour obtenir l'ID avant le commit
         
         # Générer et chiffrer le PDF
+        # Commentez temporairement cette section pour tester
+        '''
         try:
             pdf_data = generate_pdf_from_order(order)
             encrypted_pdf = encrypt_pdf(pdf_data)
@@ -160,7 +162,7 @@ def create_order():
             print(f"PDF généré et chiffré pour la commande {order.id}", flush=True)
         except Exception as e:
             print(f"Erreur lors de la génération du PDF: {str(e)}", flush=True)
-            # Continue sans PDF plutôt que d'échouer complètement
+        '''
         
         db_session.session.commit()
         
