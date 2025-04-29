@@ -316,6 +316,24 @@ def update_password():
     except exceptions.VerifyMismatchError:
         return jsonify({"success": False, "message": "Ancien mot de passe incorrect"}), 400
     
+def resize_image_if_needed(img, max_size=1024):
+    """Redimensionne l'image si elle est trop grande"""
+    width, height = img.size
+    
+    # Vérifier si l'image est trop grande
+    if width > max_size or height > max_size:
+        print(f"Redimensionnement de l'image: {width}x{height} -> max {max_size}", flush=True)
+        
+        # Calculer le ratio pour maintenir les proportions
+        ratio = min(max_size / width, max_size / height)
+        new_width = int(width * ratio)
+        new_height = int(height * ratio)
+        
+        # Redimensionner l'image
+        return img.resize((new_width, new_height), Image.LANCZOS)
+    
+    return img
+
 def encode_steganography_data(image_bytes, user_id, timestamp=None):
     """Cache des métadonnées dans une image"""
     if timestamp is None:
@@ -335,9 +353,14 @@ def encode_steganography_data(image_bytes, user_id, timestamp=None):
     try:
         # Ouvrir l'image
         img = Image.open(io.BytesIO(image_bytes))
+        original_size = img.size
         
-        # Méthode alternative: ajouter les métadonnées comme info dans le PNG
-        # Cette méthode est plus fiable que la stéganographie LSB
+        # Redimensionner l'image si nécessaire
+        img = resize_image_if_needed(img, max_size=1024)
+        if img.size != original_size:
+            print(f"Image redimensionnée: {original_size} -> {img.size}", flush=True)
+        
+
         output = io.BytesIO()
         
         # Conserver le format original si possible, sinon utiliser PNG
