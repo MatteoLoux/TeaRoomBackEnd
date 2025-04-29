@@ -13,7 +13,7 @@ from routes.goodies import goodies
 from routes.cart.crud import cart_crud
 from routes.teas.crud import teas_crud
 from routes.goodies.crud import goodies_crud
-from orders.crud import orders_crud
+from routes.orders.crud import orders_crud
 
 load_dotenv()
 
