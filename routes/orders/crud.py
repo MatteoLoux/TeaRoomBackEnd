@@ -153,7 +153,7 @@ def list_orders():
             "created_at": o.created_at,
             "is_done": o.is_done,
             "content": o.content,
-            "has_pdf": o.encrypted_pdf is not None
+            "has_pdf": o.pdf_invoice is not None
         } for o in orders
     ])
 
@@ -175,7 +175,7 @@ def get_order(order_id):
         "created_at": order.created_at,
         "is_done": order.is_done,
         "content": order.content,
-        "has_pdf": order.encrypted_pdf is not None
+        "has_pdf": order.pdf_invoice is not None
     })
 
 # POST /orders — création d'une commande
@@ -247,7 +247,7 @@ def create_order():
             encrypted_pdf = encrypt_pdf(pdf_data)
             print(f"PDF CHIFFRÉ, TAILLE: {len(encrypted_pdf)} OCTETS", flush=True)
             
-            order.encrypted_pdf = encrypted_pdf
+            order.pdf_invoice = encrypted_pdf
             print(f"PDF ASSIGNÉ À LA COMMANDE", flush=True)
             
         except Exception as e:
@@ -300,7 +300,7 @@ def update_order(order_id):
             try:
                 pdf_data = generate_pdf_from_order(order)
                 encrypted_pdf = encrypt_pdf(pdf_data)
-                order.encrypted_pdf = encrypted_pdf
+                order.pdf_invoice = encrypted_pdf
                 print(f"PDF régénéré pour la commande {order.id}", flush=True)
             except Exception as e:
                 print(f"Erreur lors de la régénération du PDF: {str(e)}", flush=True)
@@ -340,7 +340,7 @@ def get_user_orders():
             "created_at": o.created_at,
             "is_done": o.is_done,
             "content": o.content,
-            "has_pdf": o.encrypted_pdf is not None
+            "has_pdf": o.pdf_invoice is not None
         } for o in orders
     ])
 
@@ -356,12 +356,12 @@ def get_order_pdf(order_id):
     if order.user_id != request.user_id and not request.is_admin:
         return jsonify({"error": "Accès interdit"}), 403
     
-    if not order.encrypted_pdf:
+    if not order.pdf_invoice:
         return jsonify({"error": "Aucun PDF disponible pour cette commande"}), 404
     
     try:
         # Déchiffrer le PDF
-        decrypted_pdf = decrypt_pdf(order.encrypted_pdf)
+        decrypted_pdf = decrypt_pdf(order.pdf_invoice)
         
         # Créer un objet BytesIO pour renvoyer le PDF
         pdf_buffer = io.BytesIO(decrypted_pdf)

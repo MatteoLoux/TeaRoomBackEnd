@@ -99,4 +99,4 @@ class Order(db_session.Model):
     created_at = db_session.Column(db_session.DateTime(timezone=False), server_default=func.now(), nullable=False)
     is_done = db_session.Column(db_session.Boolean, nullable=False, default=False)
     content = db_session.Column(db_session.JSON, nullable=False)
-    encrypted_pdf = db_session.Column(db_session.LargeBinary, nullable=True)
+    pdf_invoice = db_session.Column(db_session.LargeBinary, nullable=True)
