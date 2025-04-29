@@ -10,7 +10,7 @@ import json
 import time
 from PIL import Image
 import io
-import numpy as np
+from PIL.PngImagePlugin import PngInfo
 
 users_crud = Blueprint('users_crud', __name__)
 
@@ -280,159 +280,65 @@ def update_password():
         return jsonify({"success": False, "message": "Ancien mot de passe incorrect"}), 400
     
 def encode_steganography_data(image_bytes, user_id, timestamp=None):
-    # Utiliser le timestamp actuel si non fourni
+    """Version simplifiée et plus robuste de la stéganographie"""
     if timestamp is None:
         timestamp = int(time.time())
     
-    # Créer les données à cacher (identifiant utilisateur et timestamp)
+    # Créer les données à cacher
     data = {
         "user_id": user_id,
         "timestamp": timestamp,
-        "signature": "TeaRoom"  # Marque pour identifier nos images modifiées
+        "signature": "TeaRoom"
     }
-    data_str = json.dumps(data)
     
-    # Convertir les données en format binaire
-    binary_data = ''.join(format(ord(char), '08b') for char in data_str)
+    # Convertir en JSON puis en base64 pour éviter les problèmes de caractères
+    json_data = json.dumps(data)
+    encoded_data = base64.b64encode(json_data.encode()).decode()
     
+    # Placer les données dans les métadonnées plutôt que dans les pixels
+    # Cette approche est beaucoup plus simple et robuste
     try:
-        # Convertir les bytes de l'image en objet PIL
-        img = Image.open(io.BytesIO(image_bytes))
-        
-        # Vérifier si l'image existe et a un format valide
-        if img.format not in ['JPEG', 'PNG', 'BMP']:
-            print(f"Format d'image non supporté pour la stéganographie: {img.format}",flush=True)
-            return image_bytes  # Retourner l'image originale
-        
-        # Convertir en mode RGB si nécessaire (important pour les PNG avec transparence)
-        if img.mode in ['RGBA', 'LA']:
-            background = Image.new('RGB', img.size, (255, 255, 255))
-            background.paste(img, mask=img.split()[3])  # 3 est le canal alpha
-            img = background
-        elif img.mode != 'RGB':
-            img = img.convert('RGB')
-        
-        # Convertir l'image en tableau NumPy
-        img_array = np.array(img)
-        
-        # Vérifier si l'image a suffisamment d'espace pour cacher les données
-        height, width = img_array.shape[:2]
-        channels = 3  # Nous travaillons en RGB maintenant
-        max_bits = height * width * channels
-        
-        if len(binary_data) + 32 > max_bits:  # +32 pour la longueur
-            print(f"L'image est trop petite pour cacher les données: {len(binary_data)+32} bits nécessaires, {max_bits} disponibles",flush=True)
-            return image_bytes
-        
-        # Ajouter la longueur des données en binaire (32 bits)
-        binary_data_length = format(len(binary_data), '032b')
-        binary_message = binary_data_length + binary_data
-        
-        # Cacher les données dans l'image
-        data_index = 0
-        for i in range(height):
-            for j in range(width):
-                for k in range(channels):
-                    if data_index < len(binary_message):
-                        # Modifier le bit le moins significatif
-                        pixel_value = img_array[i, j, k]
-                        img_array[i, j, k] = (pixel_value & ~1) | int(binary_message[data_index])
-                        data_index += 1
-                    else:
-                        break
-                if data_index >= len(binary_message):
-                    break
-            if data_index >= len(binary_message):
-                break
-        
-        # Convertir le tableau modifié en image
-        modified_img = Image.fromarray(img_array)
-        
-        # Sauvegarder l'image en mémoire avec un format non destructif
-        output = io.BytesIO()
-        modified_img.save(output, format='PNG')  # PNG est sans perte, préférable pour la stéganographie
-        
-        return output.getvalue()
-        
-    except Exception as e:
-        print(f"Erreur lors de l'encodage stéganographique: {str(e)}",flush=True)
-        return image_bytes  # En cas d'erreur, retourner l'image originale
-
-def decode_steganography_data(image_bytes):
-    try:
-        # Convertir les bytes de l'image en objet PIL
         img = Image.open(io.BytesIO(image_bytes))
         
         # Convertir en RGB si nécessaire
         if img.mode != 'RGB':
             img = img.convert('RGB')
         
-        # Convertir l'image en tableau NumPy
-        img_array = np.array(img)
+        # Créer une nouvelle image avec les mêmes caractéristiques
+        output = io.BytesIO()
         
-        # Récupérer les dimensions de l'image
-        height, width = img_array.shape[:2]
-        channels = 3  # Nous travaillons en RGB
+        # Enregistrer l'image avec les métadonnées cachées
+        # Utiliser un commentaire EXIF pour cacher les données
+        img.save(output, format='PNG', 
+                 pnginfo=PngInfo().add_text("TeaRoom", encoded_data))
         
-        # Extraire d'abord les 32 premiers bits pour connaître la longueur des données
-        binary_length = ""
-        for i in range(32):
-            row = i // (width * channels)
-            col = (i // channels) % width
-            channel = i % channels
-            
-            binary_length += str(img_array[row, col, channel] & 1)
-        
-        try:
-            data_length = int(binary_length, 2)
-            
-            # Vérification de sécurité
-            max_bits = height * width * channels
-            if data_length <= 0 or data_length > max_bits - 32:
-                print(f"Longueur des données invalide: {data_length}",flush=True)
-                return None
-            
-            # Extraire les données
-            binary_data = ""
-            for i in range(32, 32 + data_length):
-                row = i // (width * channels)
-                col = (i // channels) % width
-                channel = i % channels
-                
-                binary_data += str(img_array[row, col, channel] & 1)
-            
-            # Convertir les données binaires en chaîne de caractères
-            chars = []
-            for i in range(0, len(binary_data), 8):
-                if i + 8 <= len(binary_data):
-                    byte = binary_data[i:i+8]
-                    chars.append(chr(int(byte, 2)))
-            
-            data_str = ''.join(chars)
-            
-            # Essayer de décoder le JSON
-            try:
-                data = json.loads(data_str)
-                
-                # Vérifier la signature
-                if data.get("signature") != "TeaRoom":
-                    print("Signature invalide",flush=True)
-                    return None
-                
-                print(f"Métadonnées décodées avec succès: {data}",flush=True)
-                return data
-                
-            except json.JSONDecodeError as e:
-                print(f"Erreur de décodage JSON: {str(e)}",flush=True)
-                print(f"Chaîne récupérée: {data_str}",flush=True)
-                return None
-                
-        except ValueError as e:
-            print(f"Erreur lors de la conversion des données: {str(e)}",flush=True)
-            return None
-            
+        return output.getvalue()
     except Exception as e:
-        print(f"Erreur lors du décodage stéganographique: {str(e)}",flush=True)
+        print(f"Erreur lors de l'encodage: {str(e)}", flush=True)
+        return image_bytes
+
+def decode_steganography_data(image_bytes):
+    """Version simplifiée pour la récupération des données"""
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        
+        # Récupérer les métadonnées
+        if "TeaRoom" in img.info:
+            encoded_data = img.info["TeaRoom"]
+            json_data = base64.b64decode(encoded_data).decode()
+            data = json.loads(json_data)
+            
+            # Vérifier la signature
+            if data.get("signature") != "TeaRoom":
+                print("Signature invalide", flush=True)
+                return None
+            
+            return data
+        else:
+            print("Aucune donnée TeaRoom trouvée", flush=True)
+            return None
+    except Exception as e:
+        print(f"Erreur lors du décodage: {str(e)}", flush=True)
         return None
 
 # Fonction utilitaire pour extraire les informations de la photo
