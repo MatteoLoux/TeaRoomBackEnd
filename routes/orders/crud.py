@@ -120,7 +120,7 @@ def generate_pdf_from_order(order):
         p.drawString(30, y-20, f"Total: {total:.2f} €")
         
         # Pied de page
-        p.setFont("Helvetica-Italic", 10)
+        p.setFont("Helvetica", 10)
         p.drawString(30, 30, "Merci pour votre commande chez TeaRoom!")
         
         p.showPage()
