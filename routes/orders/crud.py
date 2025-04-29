@@ -9,6 +9,8 @@ from reportlab.lib.pagesizes import letter
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 import base64
+import sys
+import traceback
 
 
 orders_crud = Blueprint('orders_crud', __name__)
@@ -43,70 +45,95 @@ def decrypt_pdf(encrypted_data):
 
 def generate_pdf_from_order(order):
     """Génère un PDF à partir des données de commande"""
-    buffer = io.BytesIO()
-    p = canvas.Canvas(buffer, pagesize=letter)
+    print("  DÉBUT generate_pdf_from_order", flush=True)
     
-    # Récupérer les informations de l'utilisateur
-    user = User.query.get(order.user_id)
-    client_name = f"{user.firstname} {user.lastname}" if user else f"Client ID: {order.user_id}"
-    
-    # En-tête
-    p.setFont("Helvetica-Bold", 16)
-    p.drawString(30, 750, "TeaRoom - Facture")
-    
-    # Informations client et commande
-    p.setFont("Helvetica", 12)
-    p.drawString(30, 720, f"Commande #{order.id}")
-    p.drawString(30, 700, f"Date: {order.created_at.strftime('%d/%m/%Y %H:%M')}")
-    p.drawString(30, 680, f"Client: {client_name}")
-    
-    # Contenu de la commande
-    p.drawString(30, 650, "Détails de la commande:")
-    y = 630
-    total = 0
-    
-    # Vérifier si content est une liste directement ou s'il contient une clé 'items'
-    items = []
-    if isinstance(order.content, list):
-        items = order.content
-    elif isinstance(order.content, dict) and "items" in order.content:
-        items = order.content["items"]
-    
-    for item in items:
-        product_id = item.get("product_id")
-        quantity = int(item.get("quantity", 1))
+    try:
+        buffer = io.BytesIO()
+        p = canvas.Canvas(buffer, pagesize=letter)
         
-        # Récupérer les détails du produit depuis la base de données
-        product = Tea.query.get(product_id)
-        if not product:
-            product = Goodie.query.get(product_id)
+        # Récupérer les informations de l'utilisateur
+        print("  RECHERCHE UTILISATEUR", flush=True)
+        user = User.query.get(order.user_id)
+        print(f"  UTILISATEUR TROUVÉ: {user is not None}", flush=True)
+        client_name = f"{user.firstname} {user.lastname}" if user else f"Client ID: {order.user_id}"
         
-        if product:
-            name = product.name
-            price = float(product.price)
+        # En-tête
+        print("  CRÉATION EN-TÊTE", flush=True)
+        p.setFont("Helvetica-Bold", 16)
+        p.drawString(30, 750, "TeaRoom - Facture")
+        
+        # Informations client et commande
+        p.setFont("Helvetica", 12)
+        p.drawString(30, 720, f"Commande #{order.id}")
+        p.drawString(30, 700, f"Date: {order.created_at.strftime('%d/%m/%Y %H:%M')}")
+        p.drawString(30, 680, f"Client: {client_name}")
+        
+        # Contenu de la commande
+        print("  TRAITEMENT CONTENU", flush=True)
+        p.drawString(30, 650, "Détails de la commande:")
+        y = 630
+        total = 0
+        
+        # Vérifier si content est une liste directement ou s'il contient une clé 'items'
+        items = []
+        if isinstance(order.content, list):
+            print("  CONTENU EST UNE LISTE", flush=True)
+            items = order.content
+        elif isinstance(order.content, dict) and "items" in order.content:
+            print("  CONTENU EST UN DICT AVEC ITEMS", flush=True)
+            items = order.content["items"]
         else:
-            name = f"Produit #{product_id}"
-            price = 0
-            
-        subtotal = price * quantity
-        total += subtotal
+            print(f"  FORMAT CONTENU NON RECONNU: {type(order.content)}", flush=True)
         
-        p.drawString(30, y, f"{name} x {quantity} = {subtotal:.2f} €")
-        y -= 20
+        print(f"  NOMBRE D'ITEMS: {len(items)}", flush=True)
+        
+        for i, item in enumerate(items):
+            print(f"  TRAITEMENT ITEM {i}", flush=True)
+            product_id = item.get("product_id")
+            quantity = int(item.get("quantity", 1))
+            print(f"  - PRODUCT_ID: {product_id}, QUANTITY: {quantity}", flush=True)
+            
+            # Récupérer les détails du produit depuis la base de données
+            product = Tea.query.get(product_id)
+            if not product:
+                print(f"  - PAS UN THÉ, RECHERCHE GOODIE", flush=True)
+                product = Goodie.query.get(product_id)
+            
+            if product:
+                print(f"  - PRODUIT TROUVÉ: {product.name}", flush=True)
+                name = product.name
+                price = float(product.price)
+            else:
+                print(f"  - PRODUIT NON TROUVÉ", flush=True)
+                name = f"Produit #{product_id}"
+                price = 0
+                
+            subtotal = price * quantity
+            total += subtotal
+            
+            p.drawString(30, y, f"{name} x {quantity} = {subtotal:.2f} €")
+            y -= 20
+        
+        # Total
+        print("  FINALISATION PDF", flush=True)
+        p.setFont("Helvetica-Bold", 14)
+        p.drawString(30, y-20, f"Total: {total:.2f} €")
+        
+        # Pied de page
+        p.setFont("Helvetica-Italic", 10)
+        p.drawString(30, 30, "Merci pour votre commande chez TeaRoom!")
+        
+        p.showPage()
+        p.save()
+        
+        buffer.seek(0)
+        print("  PDF GÉNÉRÉ AVEC SUCCÈS", flush=True)
+        return buffer.getvalue()
     
-    # Total
-    p.setFont("Helvetica-Bold", 14)
-    p.drawString(30, y-20, f"Total: {total:.2f} €")
-    
-    # Pied de page
-    p.setFont("Helvetica-Italic", 10)
-    p.drawString(30, 30, "Merci pour votre commande chez TeaRoom!")
-    
-    p.showPage()
-    p.save()
-    
-    buffer.seek(0)
-    return buffer.getvalue()
+    except Exception as e:
+        print(f"  ERREUR GÉNÉRATION PDF: {str(e)}", flush=True)
+        traceback.print_exc(file=sys.stdout)
+        raise
 
 # GET /orders — admin uniquement
 @orders_crud.route("/", methods=["GET"], strict_slashes=False)
@@ -155,38 +182,94 @@ def get_order(order_id):
 @orders_crud.route("/", methods=["POST"], strict_slashes=False)
 @require_jwt
 def create_order():
-    data = request.get_json()
+    print("===== DÉBUT CREATE_ORDER =====", flush=True)
+    
+    try:
+        data = request.get_json()
+        print(f"DONNÉES REÇUES: {json.dumps(data)}", flush=True)
+    except Exception as e:
+        print(f"ERREUR PARSING JSON: {str(e)}", flush=True)
+        return jsonify({"error": "Données JSON invalides"}), 400
+    
     try:
         # Validation des données obligatoires
         if not "content" in data:
+            print("ERREUR: Clé 'content' manquante", flush=True)
             return jsonify({"error": "Le contenu de la commande est obligatoire"}), 400
         
-        # Créer la commande
-        order = Order(
-            user_id=request.user_id,
-            content=data["content"],
-            is_done=data.get("is_done", False)
-        )
+        print(f"USER_ID: {request.user_id}", flush=True)
+        print(f"CONTENT TYPE: {type(data['content'])}", flush=True)
         
-        db_session.session.add(order)
-        db_session.session.flush()  # Pour obtenir l'ID avant le commit
+        # Créer la commande
+        try:
+            order = Order(
+                user_id=request.user_id,
+                content=data["content"],
+                is_done=data.get("is_done", False)
+            )
+            print("COMMANDE CRÉÉE EN MÉMOIRE", flush=True)
+        except Exception as e:
+            print(f"ERREUR CRÉATION OBJET: {str(e)}", flush=True)
+            traceback.print_exc(file=sys.stdout)
+            return jsonify({"error": f"Erreur lors de la création de l'objet commande: {str(e)}"}), 500
+        
+        try:
+            db_session.session.add(order)
+            print("COMMANDE AJOUTÉE À LA SESSION", flush=True)
+            db_session.session.flush()
+            print(f"COMMANDE FLUSH, ID: {order.id}", flush=True)
+        except Exception as e:
+            print(f"ERREUR DB FLUSH: {str(e)}", flush=True)
+            traceback.print_exc(file=sys.stdout)
+            db_session.session.rollback()
+            return jsonify({"error": f"Erreur base de données: {str(e)}"}), 500
         
         # Générer et chiffrer le PDF
-        # Commentez temporairement cette section pour tester
         try:
+            print("DÉBUT GÉNÉRATION PDF", flush=True)
+            
+            # Déboguer le contenu de la commande
+            print(f"CONTENU COMMANDE: {json.dumps(order.content)}", flush=True)
+            
+            # Afficher details des produits
+            if isinstance(order.content, list):
+                for i, item in enumerate(order.content):
+                    print(f"PRODUIT {i}: {json.dumps(item)}", flush=True)
+                    product_id = item.get('product_id')
+                    tea = Tea.query.get(product_id)
+                    goodie = Goodie.query.get(product_id)
+                    print(f"  - TEA TROUVÉ: {tea is not None}", flush=True)
+                    print(f"  - GOODIE TROUVÉ: {goodie is not None}", flush=True)
+            
             pdf_data = generate_pdf_from_order(order)
+            print(f"PDF GÉNÉRÉ, TAILLE: {len(pdf_data)} OCTETS", flush=True)
+            
             encrypted_pdf = encrypt_pdf(pdf_data)
+            print(f"PDF CHIFFRÉ, TAILLE: {len(encrypted_pdf)} OCTETS", flush=True)
+            
             order.encrypted_pdf = encrypted_pdf
-            print(f"PDF généré et chiffré pour la commande {order.id}", flush=True)
+            print(f"PDF ASSIGNÉ À LA COMMANDE", flush=True)
+            
         except Exception as e:
-            print(f"Erreur lors de la génération du PDF: {str(e)}", flush=True)
-            # Continue sans PDF plutôt que d'échouer complètement
+            print(f"ERREUR PDF: {str(e)}", flush=True)
+            traceback.print_exc(file=sys.stdout)
+            # Continuer sans PDF
         
-        db_session.session.commit()
+        try:
+            db_session.session.commit()
+            print(f"COMMANDE SAUVEGARDÉE, ID: {order.id}", flush=True)
+        except Exception as e:
+            print(f"ERREUR COMMIT: {str(e)}", flush=True)
+            traceback.print_exc(file=sys.stdout)
+            db_session.session.rollback()
+            return jsonify({"error": f"Erreur lors de l'enregistrement: {str(e)}"}), 500
         
+        print("===== FIN CREATE_ORDER =====", flush=True)
         return jsonify({"id": order.id}), 201
     
     except Exception as e:
+        print(f"ERREUR GLOBALE: {str(e)}", flush=True)
+        traceback.print_exc(file=sys.stdout)
         db_session.session.rollback()
         return jsonify({"error": f"Erreur lors de la création de la commande: {str(e)}"}), 500
 
