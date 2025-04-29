@@ -340,14 +340,22 @@ def encode_steganography_data(image_bytes, user_id, timestamp=None):
         
         # Ouvrir l'image et la traiter
         img = Image.open(io.BytesIO(image_bytes))
+        original_format = img.format
         print(f"Image ouverte: {img.format}, {img.size}, {img.mode}", flush=True)
+        
+        # NOUVEAU: Redimensionner l'image si elle est trop grande
+        MAX_SIZE = (1200, 1200)  # Taille maximale raisonnable
+        if img.width > MAX_SIZE[0] or img.height > MAX_SIZE[1]:
+            print(f"Redimensionnement de l'image de {img.size} à {MAX_SIZE}", flush=True)
+            img.thumbnail(MAX_SIZE, Image.LANCZOS)
+            print(f"Nouvelle taille: {img.size}", flush=True)
         
         # Convertir en RGB si nécessaire
         if img.mode != 'RGB':
             print(f"Conversion de {img.mode} vers RGB", flush=True)
             img = img.convert('RGB')
             
-        # Vérifier si l'image a suffisamment de pixels pour stocker les données
+        # SIMPLIFIÉ: Approche plus efficace pour manipuler les pixels
         width, height = img.size
         max_bits = width * height * 3  # 3 canaux (R,G,B) par pixel
         
@@ -356,35 +364,37 @@ def encode_steganography_data(image_bytes, user_id, timestamp=None):
             # Au lieu de lever une erreur, simplement retourner l'image originale
             return image_bytes
         
-        # Obtenir les pixels sous forme de tableau
-        pixels = list(img.getdata())
-        pixels_modified = []
+        # OPTIMISÉ: Traiter les pixels par petits morceaux pour économiser la mémoire
         data_index = 0
-        
-        # Modifier les bits de poids faible des pixels
-        for pixel in pixels:
-            if data_index < len(binary_data):
-                # Modifier chaque canal RGB du pixel
-                new_pixel = list(pixel)
-                for i in range(min(3, len(pixel))):  # Limité à RGB, ignorer Alpha si présent
+        for y in range(height):
+            if data_index >= len(binary_data):
+                break
+                
+            for x in range(width):
+                if data_index >= len(binary_data):
+                    break
+                    
+                pixel = list(img.getpixel((x, y)))
+                
+                # Modifier jusqu'à 3 bits par pixel (un pour chaque canal RGB)
+                for i in range(min(3, len(pixel))):
                     if data_index < len(binary_data):
-                        # Remplacer le bit de poids faible
+                        # Modifier le bit de poids faible
                         new_bit = int(binary_data[data_index])
-                        new_pixel[i] = (new_pixel[i] & ~1) | new_bit  # Effacer le LSB puis définir la valeur
+                        pixel[i] = (pixel[i] & ~1) | new_bit
                         data_index += 1
-                pixels_modified.append(tuple(new_pixel))
-            else:
-                pixels_modified.append(pixel)
-        
-        # Créer une nouvelle image avec les pixels modifiés
-        new_img = Image.new(img.mode, img.size)
-        new_img.putdata(pixels_modified)
+                
+                img.putpixel((x, y), tuple(pixel))
         
         # Enregistrer l'image modifiée
         output = io.BytesIO()
-        # Préserver le format original si possible
-        save_format = img.format if img.format else 'PNG'
-        new_img.save(output, format=save_format)
+        save_format = original_format if original_format else 'JPEG'
+        
+        if save_format == 'JPEG':
+            # Utiliser une qualité élevée pour JPEG
+            img.save(output, format=save_format, quality=95)
+        else:
+            img.save(output, format=save_format)
         
         print("Stéganographie terminée avec succès", flush=True)
         return output.getvalue()
@@ -392,8 +402,9 @@ def encode_steganography_data(image_bytes, user_id, timestamp=None):
     except Exception as e:
         print(f"Erreur lors de l'encodage des pixels: {str(e)}", flush=True)
         import traceback
-        traceback.print_exc()
-        return image_bytes  # Retourner l'image originale en cas d'erreur
+        traceback.print_exc(flush=True)
+        # Retourner l'image originale en cas d'erreur
+        return image_bytes
 
 def decode_steganography_data(image_bytes):
     """Récupère les données cachées dans les pixels de l'image"""
