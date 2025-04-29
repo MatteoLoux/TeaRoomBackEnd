@@ -280,7 +280,7 @@ def update_password():
         return jsonify({"success": False, "message": "Ancien mot de passe incorrect"}), 400
     
 def encode_steganography_data(image_bytes, user_id, timestamp=None):
-    """Version simplifiée et plus robuste de la stéganographie"""
+    """Cache les données d'identification dans les pixels de l'image en utilisant la technique LSB"""
     if timestamp is None:
         timestamp = int(time.time())
     
@@ -291,54 +291,103 @@ def encode_steganography_data(image_bytes, user_id, timestamp=None):
         "signature": "TeaRoom"
     }
     
-    # Convertir en JSON puis en base64 pour éviter les problèmes de caractères
+    # Convertir en JSON puis en base64
     json_data = json.dumps(data)
     encoded_data = base64.b64encode(json_data.encode()).decode()
     
-    # Placer les données dans les métadonnées plutôt que dans les pixels
-    # Cette approche est beaucoup plus simple et robuste
+    # Convertir les données en bits
+    binary_data = ''.join(format(ord(char), '08b') for char in encoded_data)
+    
     try:
         img = Image.open(io.BytesIO(image_bytes))
         
         # Convertir en RGB si nécessaire
         if img.mode != 'RGB':
             img = img.convert('RGB')
+            
+        # Vérifier si l'image a suffisamment de pixels pour stocker les données
+        width, height = img.size
+        max_bits = width * height * 3  # 3 canaux (R,G,B) par pixel
         
-        # Créer une nouvelle image avec les mêmes caractéristiques
+        if len(binary_data) > max_bits:
+            raise ValueError(f"L'image est trop petite pour cacher les données ({len(binary_data)} bits requis, {max_bits} disponibles)")
+        
+        # Obtenir les pixels sous forme de tableau
+        pixels = list(img.getdata())
+        pixels_modified = []
+        data_index = 0
+        
+        # Modifier les bits de poids faible des pixels
+        for pixel in pixels:
+            if data_index < len(binary_data):
+                # Modifier chaque canal RGB du pixel
+                new_pixel = list(pixel)
+                for i in range(min(3, len(pixel))):  # Limité à RGB, ignorer Alpha si présent
+                    if data_index < len(binary_data):
+                        # Remplacer le bit de poids faible
+                        new_bit = int(binary_data[data_index])
+                        new_pixel[i] = (new_pixel[i] & ~1) | new_bit  # Effacer le LSB puis définir la valeur
+                        data_index += 1
+                pixels_modified.append(tuple(new_pixel))
+            else:
+                pixels_modified.append(pixel)
+        
+        # Créer une nouvelle image avec les pixels modifiés
+        new_img = Image.new(img.mode, img.size)
+        new_img.putdata(pixels_modified)
+        
+        # Enregistrer l'image modifiée
         output = io.BytesIO()
-        
-        # Enregistrer l'image avec les métadonnées cachées
-        # Utiliser un commentaire EXIF pour cacher les données
-        img.save(output, format='PNG', 
-                 pnginfo=PngInfo().add_text("TeaRoom", encoded_data))
+        new_img.save(output, format='PNG')
         
         return output.getvalue()
     except Exception as e:
-        print(f"Erreur lors de l'encodage: {str(e)}", flush=True)
+        print(f"Erreur lors de l'encodage des pixels: {str(e)}", flush=True)
         return image_bytes
 
 def decode_steganography_data(image_bytes):
-    """Version simplifiée pour la récupération des données"""
+    """Récupère les données cachées dans les pixels de l'image"""
     try:
+        # Vérifier d'abord s'il y a des métadonnées (ancienne méthode)
         img = Image.open(io.BytesIO(image_bytes))
-        
-        # Récupérer les métadonnées
         if "TeaRoom" in img.info:
             encoded_data = img.info["TeaRoom"]
             json_data = base64.b64decode(encoded_data).decode()
             data = json.loads(json_data)
             
-            # Vérifier la signature
-            if data.get("signature") != "TeaRoom":
-                print("Signature invalide", flush=True)
-                return None
-            
-            return data
-        else:
-            print("Aucune donnée TeaRoom trouvée", flush=True)
-            return None
+            if data.get("signature") == "TeaRoom":
+                return data
+        
+        # Sinon, essayer de récupérer les données des pixels
+        pixels = list(img.getdata())
+        binary_data = ""
+        
+        # Extraire les bits de poids faible
+        for pixel in pixels:
+            for i in range(min(3, len(pixel))):  # Limité à RGB
+                binary_data += str(pixel[i] & 1)  # Récupérer le LSB
+                
+                # Vérifier périodiquement si nous avons trouvé une chaîne valide
+                if len(binary_data) % 8 == 0 and len(binary_data) >= 8:
+                    # Essayer de décoder progressivement pour trouver la fin des données
+                    try:
+                        # Convertir les bits en caractères
+                        chars = ''.join([chr(int(binary_data[i:i+8], 2)) for i in range(0, len(binary_data), 8)])
+                        # Essayer de décoder en base64 puis en JSON
+                        json_data = base64.b64decode(chars).decode('utf-8', errors='ignore')
+                        data = json.loads(json_data)
+                        
+                        # Vérifier la signature
+                        if data.get("signature") == "TeaRoom":
+                            return data
+                    except:
+                        # Continuer l'extraction si la décodage échoue
+                        pass
+        
+        print("Aucune donnée valide trouvée dans les pixels", flush=True)
+        return None
     except Exception as e:
-        print(f"Erreur lors du décodage: {str(e)}", flush=True)
+        print(f"Erreur lors du décodage des pixels: {str(e)}", flush=True)
         return None
 
 # Fonction utilitaire pour extraire les informations de la photo
