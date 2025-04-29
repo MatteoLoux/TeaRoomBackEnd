@@ -411,6 +411,8 @@ def decode_steganography_data(image_bytes):
     try:
         # Vérifier d'abord s'il y a des métadonnées (ancienne méthode)
         img = Image.open(io.BytesIO(image_bytes))
+        print(f"Décodage image: {img.format}, {img.size}, {img.mode}", flush=True)
+        
         if "TeaRoom" in img.info:
             encoded_data = img.info["TeaRoom"]
             json_data = base64.b64decode(encoded_data).decode()
@@ -419,18 +421,30 @@ def decode_steganography_data(image_bytes):
             if data.get("signature") == "TeaRoom":
                 return data
         
-        # Sinon, essayer de récupérer les données des pixels
-        pixels = list(img.getdata())
+        # NOUVEAU: Redimensionner l'image si trop grande avant décodage
+        MAX_SIZE = (1200, 1200)
+        if img.width > MAX_SIZE[0] or img.height > MAX_SIZE[1]:
+            print(f"Redimensionnement pour décodage de {img.size} à {MAX_SIZE}", flush=True)
+            img.thumbnail(MAX_SIZE, Image.LANCZOS)
+        
+        # Convertir en RGB si nécessaire
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        
+        # OPTIMISÉ: Traiter les pixels pixel par pixel au lieu de tout charger en mémoire
+        width, height = img.size
         binary_data = ""
         
-        # Extraire les bits de poids faible
-        for pixel in pixels:
-            for i in range(min(3, len(pixel))):  # Limité à RGB
-                binary_data += str(pixel[i] & 1)  # Récupérer le LSB
+        for y in range(height):
+            for x in range(width):
+                pixel = img.getpixel((x, y))
+                
+                for i in range(min(3, len(pixel))):  # Limité à RGB
+                    binary_data += str(pixel[i] & 1)  # Récupérer le LSB
                 
                 # Vérifier périodiquement si nous avons trouvé une chaîne valide
-                if len(binary_data) % 8 == 0 and len(binary_data) >= 8:
-                    # Essayer de décoder progressivement pour trouver la fin des données
+                if len(binary_data) % 8 == 0 and len(binary_data) >= 672:  # Taille approximative des données encodées
+                    # Essayer de décoder progressivement
                     try:
                         # Convertir les bits en caractères
                         chars = ''.join([chr(int(binary_data[i:i+8], 2)) for i in range(0, len(binary_data), 8)])
@@ -440,15 +454,22 @@ def decode_steganography_data(image_bytes):
                         
                         # Vérifier la signature
                         if data.get("signature") == "TeaRoom":
+                            print(f"Données trouvées après lecture de {x*y} pixels", flush=True)
                             return data
                     except:
-                        # Continuer l'extraction si la décodage échoue
+                        # Continuer l'extraction si le décodage échoue
                         pass
+                
+                # Limiter la longueur maximale pour éviter les problèmes de mémoire
+                if len(binary_data) > 10000:
+                    binary_data = binary_data[-10000:]
         
         print("Aucune donnée valide trouvée dans les pixels", flush=True)
         return None
     except Exception as e:
         print(f"Erreur lors du décodage des pixels: {str(e)}", flush=True)
+        import traceback
+        traceback.print_exc(flush=True)
         return None
 
 # Fonction utilitaire pour extraire les informations de la photo
