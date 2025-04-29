@@ -317,278 +317,228 @@ def update_password():
         return jsonify({"success": False, "message": "Ancien mot de passe incorrect"}), 400
     
 def encode_steganography_data(image_bytes, user_id, timestamp=None):
-    """Cache les données d'identification dans les pixels de l'image en utilisant la technique LSB"""
+    """
+    Cache des métadonnées dans une image en utilisant la technique LSB (Least Significant Bit)
+    
+    Args:
+        image_bytes: Les données binaires de l'image
+        user_id: L'identifiant de l'utilisateur à cacher
+        timestamp: Timestamp de la modification (par défaut: timestamp actuel)
+    
+    Returns:
+        bytes: L'image modifiée avec les données cachées
+    """
     if timestamp is None:
         timestamp = int(time.time())
     
+    # Préparation des données à cacher
+    data = {
+        "user_id": user_id,
+        "timestamp": timestamp,
+        "signature": "TeaRoom"  # Signature pour vérifier que les données sont valides
+    }
+    
+    # Conversion en JSON puis en base64
+    json_data = json.dumps(data)
+    encoded_data = base64.b64encode(json_data.encode()).decode()
+    
+    # Conversion en binaire (8 bits par caractère)
+    binary_data = ''.join([format(ord(c), '08b') for c in encoded_data])
+    
     try:
-        # Créer les données à cacher
-        data = {
-            "user_id": user_id,
-            "timestamp": timestamp,
-            "signature": "TeaRoom"
-        }
-        
-        # Convertir en JSON puis en base64
-        json_data = json.dumps(data)
-        encoded_data = base64.b64encode(json_data.encode()).decode()
-        
-        # Convertir les données en bits
-        binary_data = ''.join(format(ord(char), '08b') for char in encoded_data)
-        
-        print(f"Données à cacher: {json_data} ({len(binary_data)} bits)", flush=True)
-        
-        # Ouvrir l'image et la traiter
+        # Ouvrir l'image
         img = Image.open(io.BytesIO(image_bytes))
-        original_format = img.format
-        print(f"Image ouverte: {img.format}, {img.size}, {img.mode}", flush=True)
-        
-        # NOUVEAU: Redimensionner l'image si elle est trop grande
-        MAX_SIZE = (1200, 1200)  # Taille maximale raisonnable
-        if img.width > MAX_SIZE[0] or img.height > MAX_SIZE[1]:
-            print(f"Redimensionnement de l'image de {img.size} à {MAX_SIZE}", flush=True)
-            img.thumbnail(MAX_SIZE, Image.LANCZOS)
-            print(f"Nouvelle taille: {img.size}", flush=True)
         
         # Convertir en RGB si nécessaire
         if img.mode != 'RGB':
-            print(f"Conversion de {img.mode} vers RGB", flush=True)
             img = img.convert('RGB')
-            
-        # SIMPLIFIÉ: Approche plus efficace pour manipuler les pixels
+        
+        # Vérifier si l'image est assez grande pour contenir les données
         width, height = img.size
-        max_bits = width * height * 3  # 3 canaux (R,G,B) par pixel
+        max_bits = width * height * 3  # 3 canaux par pixel
         
         if len(binary_data) > max_bits:
-            print(f"Image trop petite: {len(binary_data)} bits > {max_bits} disponibles", flush=True)
-            # Au lieu de lever une erreur, simplement retourner l'image originale
-            return image_bytes
+            print(f"Image trop petite pour contenir les données ({len(binary_data)} bits requis)", flush=True)
+            # Si l'image est trop petite, on tronque les données
+            binary_data = binary_data[:max_bits]
         
-        # Ajouter un préfixe reconnaissable au début des données
-        binary_data = '10101010' + binary_data
-        
-        # Utiliser les 100 premiers pixels de l'image pour stocker les données
-        # Le reste de l'image reste inchangé
+        # Cacher les données dans les bits de poids faible
         data_index = 0
-        for y in range(10):
-            for x in range(10):
+        pixels_modified = 0
+        
+        # Ajouter un préfixe reconnaissable
+        marker = "10101010"
+        binary_data = marker + binary_data
+        
+        for y in range(height):
+            for x in range(width):
                 if data_index >= len(binary_data):
                     break
-                    
+                
+                # Récupérer le pixel
                 pixel = list(img.getpixel((x, y)))
                 
-                for i in range(min(3, len(pixel))):
+                # Modifier les bits de poids faible pour chaque canal
+                for i in range(3):  # R, G, B
                     if data_index < len(binary_data):
+                        # Remplacer le bit de poids faible par le bit de nos données
                         new_bit = int(binary_data[data_index])
-                        pixel[i] = (pixel[i] & ~1) | new_bit
+                        pixel[i] = (pixel[i] & ~1) | new_bit  # Met à jour le dernier bit
                         data_index += 1
                 
+                # Mettre à jour le pixel
                 img.putpixel((x, y), tuple(pixel))
+                pixels_modified += 1
+            
+            if data_index >= len(binary_data):
+                break
+        
+        print(f"Données cachées: {pixels_modified} pixels modifiés sur {width}x{height}", flush=True)
         
         # Enregistrer l'image modifiée
         output = io.BytesIO()
-        # Toujours utiliser PNG pour préserver les bits de poids faible
         img.save(output, format='PNG')
-        
-        print("Stéganographie terminée avec succès", flush=True)
         return output.getvalue()
-        
+    
     except Exception as e:
-        print(f"Erreur lors de l'encodage des pixels: {str(e)}", flush=True)
+        print(f"Erreur lors du marquage de l'image: {str(e)}", flush=True)
         import traceback
         traceback.print_exc(flush=True)
-        # Retourner l'image originale en cas d'erreur
+        # En cas d'erreur, retourner l'image originale
         return image_bytes
 
 def decode_steganography_data(image_bytes):
-    """Récupère les données cachées dans les pixels de l'image"""
+    """
+    Récupère les données cachées dans les pixels de l'image
+    
+    Args:
+        image_bytes: Les données binaires de l'image
+    
+    Returns:
+        dict: Les métadonnées extraites ou None si aucune donnée valide n'est trouvée
+    """
     try:
-        # Vérifier d'abord s'il y a des métadonnées (ancienne méthode)
+        # Ouvrir l'image
         img = Image.open(io.BytesIO(image_bytes))
         print(f"Décodage image: {img.format}, {img.size}, {img.mode}", flush=True)
-        
-        if "TeaRoom" in img.info:
-            encoded_data = img.info["TeaRoom"]
-            json_data = base64.b64decode(encoded_data).decode()
-            data = json.loads(json_data)
-            
-            if data.get("signature") == "TeaRoom":
-                return data
         
         # Convertir en RGB si nécessaire
         if img.mode != 'RGB':
             img = img.convert('RGB')
         
-        # Lire uniquement les 100 premiers pixels
+        width, height = img.size
         binary_data = ""
-        for y in range(10):
-            for x in range(10):
+        
+        # Lire les bits de poids faible
+        for y in range(height):
+            for x in range(width):
                 pixel = img.getpixel((x, y))
                 
-                for i in range(min(3, len(pixel))):
-                    binary_data += str(pixel[i] & 1)
+                # Extraire le bit de poids faible de chaque canal
+                for i in range(3):  # R, G, B
+                    binary_data += str(pixel[i] & 1)  # Récupère le dernier bit
+                
+                # Si on a assez de données, on arrête
+                if len(binary_data) > 10000:  # Limite raisonnable
+                    break
+            
+            if len(binary_data) > 10000:
+                break
         
-        # Chercher le préfixe '10101010'
-        start_index = binary_data.find('10101010')
+        # Rechercher le marqueur de début
+        marker = "10101010"
+        start_index = binary_data.find(marker)
+        
         if start_index >= 0:
-            # Extraire les données après le préfixe
-            binary_data = binary_data[start_index + 8:]
+            # Extraire les données après le marqueur
+            binary_data = binary_data[start_index + len(marker):]
             
             # Convertir les bits en caractères
-            # Grouper les bits par paquets de 8
-            bytes_data = []
+            bytes_data = ""
             for i in range(0, len(binary_data), 8):
                 if i + 8 <= len(binary_data):
                     byte = binary_data[i:i+8]
-                    bytes_data.append(int(byte, 2))
+                    bytes_data += chr(int(byte, 2))
             
-            # Convertir en bytes puis décoder
-            if bytes_data:
-                try:
-                    # Convertir les valeurs numériques en bytes
-                    bytes_array = bytes(bytes_data)
-                    # Décoder comme base64
-                    base64_str = bytes_array.decode('ascii', errors='ignore')
-                    # Décoder le base64 en JSON
-                    json_str = base64.b64decode(base64_str).decode('utf-8', errors='ignore')
-                    # Parser le JSON
-                    data = json.loads(json_str)
-                    
-                    # Vérifier la signature
-                    if data.get("signature") == "TeaRoom":
-                        print(f"Données stéganographiées trouvées: {data}", flush=True)
-                        return data
-                except Exception as e:
-                    print(f"Erreur lors du décodage des bits: {str(e)}", flush=True)
+            # Décoder le base64 puis le JSON
+            try:
+                json_data = base64.b64decode(bytes_data).decode()
+                data = json.loads(json_data)
+                
+                # Vérifier la signature
+                if data.get("signature") == "TeaRoom":
+                    print(f"Données stéganographiées trouvées: {data}", flush=True)
+                    return data
+            except Exception as e:
+                print(f"Erreur lors du décodage: {str(e)}", flush=True)
         
         print("Aucune donnée valide trouvée dans les pixels", flush=True)
         return None
+    
     except Exception as e:
-        print(f"Erreur lors du décodage des pixels: {str(e)}", flush=True)
+        print(f"Erreur lors de l'extraction des métadonnées: {str(e)}", flush=True)
         import traceback
         traceback.print_exc(flush=True)
         return None
 
-# Fonction utilitaire pour extraire les informations de la photo
-@users_crud.route("/verify-photo/<int:user_id>", methods=["GET"])
-@require_jwt
-def verify_photo_metadata(user_id):
-    print(f"Demande de métadonnées pour l'utilisateur {user_id}",flush=True)
+@users_crud.route("/verify-photo/<int:user_id>", methods=["GET", "OPTIONS"])
+def verify_photo(user_id):
+    """
+    GET /users/verify-photo/<user_id> — Vérifie et renvoie les métadonnées cachées dans la photo
+    """
+    # Gérer les requêtes OPTIONS pour CORS
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
     
-    # Seuls les administrateurs peuvent vérifier les métadonnées des photos
-    if not request.is_admin:
-        print("Accès refusé: l'utilisateur n'est pas administrateur",flush=True)
-        return jsonify({"error": "Accès interdit"}), 403
+    print(f"Demande de métadonnées pour l'utilisateur {user_id}", flush=True)
     
     user = User.query.get(user_id)
     if not user:
-        print(f"Utilisateur {user_id} non trouvé",flush=True)
         return jsonify({"error": "Utilisateur non trouvé"}), 404
     
     if not user.photo:
-        print(f"L'utilisateur {user_id} n'a pas de photo",flush=True)
-        return jsonify({"message": "Pas de photo"}), 200
+        return jsonify({"error": "L'utilisateur n'a pas de photo"}), 404
     
-    try:
-        # Essayer de décoder les métadonnées
-        print(f"Tentative de décodage des métadonnées pour l'utilisateur {user_id}",flush=True)
-        metadata = decode_steganography_data(user.photo)
-        
-        if metadata:
-            print(f"Métadonnées trouvées: {metadata}",flush=True)
-            response_data = {
-                "metadata": metadata,
-                "user_id": metadata.get("user_id"),
-                "timestamp": metadata.get("timestamp"),
-                "date": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(metadata.get("timestamp", 0)))
-            }
-            return jsonify(response_data)
-        else:
-            print(f"Aucune métadonnée trouvée pour l'utilisateur {user_id}",flush=True)
-            return jsonify({"message": "Aucune métadonnée trouvée"}), 200
-            
-    except Exception as e:
-        print(f"Erreur lors de l'extraction des métadonnées: {str(e)}",flush=True)
-        return jsonify({"error": str(e)}), 200
+    print(f"Tentative de décodage des métadonnées pour l'utilisateur {user_id}", flush=True)
+    metadata = decode_steganography_data(user.photo)
+    
+    if metadata:
+        return jsonify({
+            "user_id": metadata.get("user_id"),
+            "timestamp": metadata.get("timestamp"),
+            "date": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(metadata.get("timestamp")))
+        })
+    else:
+        print(f"Aucune métadonnée trouvée pour l'utilisateur {user_id}", flush=True)
+        return jsonify({"error": "Aucune métadonnée trouvée"}), 404
 
 @users_crud.route("/test-steganography", methods=["GET"])
 def test_steganography():
     """
-    Route de test pour vérifier que la stéganographie fonctionne
+    GET /users/test-steganography — Route de test pour la stéganographie
     """
     try:
         # Créer une image test
-        img = Image.new('RGB', (100, 100), color=(255, 255, 255))
+        img = Image.new('RGB', (100, 100), color='white')
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG')
+        image_bytes = buffer.getvalue()
         
-        # Convertir l'image en bytes
-        img_bytes_io = io.BytesIO()
-        img.save(img_bytes_io, format='PNG')
-        img_bytes = img_bytes_io.getvalue()
-        
-        # Données test à encoder
-        test_id = "test_user"
-        test_timestamp = int(time.time())
+        # Données à cacher
+        user_id = "test_user"
+        timestamp = int(time.time())
         
         # Encoder les données
-        encoded_bytes = encode_steganography_data(img_bytes, test_id, test_timestamp)
+        encoded_image = encode_steganography_data(image_bytes, user_id, timestamp)
         
         # Décoder les données
-        decoded_data = decode_steganography_data(encoded_bytes)
+        decoded_data = decode_steganography_data(encoded_image)
         
-        # Retourner les résultats
         return jsonify({
-            "success": decoded_data is not None,
-            "original_data": {
-                "user_id": test_id,
-                "timestamp": test_timestamp
-            },
+            "success": decoded_data is not None and decoded_data.get("user_id") == user_id,
+            "original_data": {"user_id": user_id, "timestamp": timestamp},
             "decoded_data": decoded_data
         })
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        })
-
-# Route pour appliquer la stéganographie à toutes les photos existantes
-@users_crud.route("/apply-steno", methods=["POST"])
-@require_jwt
-def apply_steganography_to_all():
-    """
-    Applique la stéganographie à toutes les photos existantes
-    """
-    if not request.is_admin:
-        return jsonify({"error": "Accès interdit"}), 403
+        return jsonify({"success": False, "error": str(e)})
     
-    print("Début de l'application de stéganographie sur toutes les photos", flush=True)
-    users_with_photos = User.query.filter(User.photo != None).all()
-    processed_count = 0
-    error_count = 0
-    
-    for user in users_with_photos:
-        try:
-            print(f"Traitement de la photo de l'utilisateur {user.id}", flush=True)
-            # Vérifier si des métadonnées existent déjà
-            metadata = decode_steganography_data(user.photo)
-            
-            if not metadata:
-                print(f"Pas de métadonnées trouvées, application de la stéganographie", flush=True)
-                marked_image = encode_steganography_data(user.photo, user.id, int(time.time()))
-                user.photo = marked_image
-                processed_count += 1
-            else:
-                print(f"Métadonnées existantes: {metadata}", flush=True)
-        except Exception as e:
-            error_count += 1
-            print(f"Erreur pour l'utilisateur {user.id}: {str(e)}", flush=True)
-            
-    # Sauvegarder les modifications
-    db_session.session.commit()
-    print(f"Stéganographie appliquée: {processed_count} photos traitées, {error_count} erreurs", flush=True)
-    
-    return jsonify({
-        "success": True,
-        "processed": processed_count,
-        "errors": error_count,
-        "total": len(users_with_photos)
-    })
