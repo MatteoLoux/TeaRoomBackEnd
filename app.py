@@ -13,6 +13,7 @@ from routes.goodies import goodies
 from routes.cart.crud import cart_crud
 from routes.teas.crud import teas_crud
 from routes.goodies.crud import goodies_crud
+from orders.crud import orders_crud
 
 load_dotenv()
 
@@ -36,6 +37,7 @@ app.register_blueprint(session, url_prefix="/session")
 app.register_blueprint(cart_crud, url_prefix="/cart")
 app.register_blueprint(teas_crud, url_prefix="/teas")
 app.register_blueprint(goodies_crud, url_prefix="/goodies")
+app.register_blueprint(orders_crud, url_prefix='/orders')
 
 
 @app.route("/")

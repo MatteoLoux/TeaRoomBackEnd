@@ -90,3 +90,13 @@ class Goodie(db_session.Model):
     description = db_session.Column(db_session.Text, nullable=True)
     is_available = db_session.Column(db_session.Boolean, nullable=False, default=False)
     quantity = db_session.Column(db_session.Integer, nullable=False, default=0)
+
+class Order(db_session.Model):
+    __tablename__ = 'orders'
+
+    id = db_session.Column(db_session.Integer, primary_key=True)
+    user_id = db_session.Column(db_session.Integer, db_session.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    created_at = db_session.Column(db_session.DateTime(timezone=False), server_default=func.now(), nullable=False)
+    is_done = db_session.Column(db_session.Boolean, nullable=False, default=False)
+    content = db_session.Column(db_session.JSON, nullable=False)
+    encrypted_pdf = db_session.Column(db_session.LargeBinary, nullable=True)
