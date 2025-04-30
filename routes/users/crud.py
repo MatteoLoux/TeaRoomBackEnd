@@ -112,7 +112,6 @@ def create_user():
                 user.photo = marked_image
                 db_session.session.commit()
             except Exception as e:
-                print(f"Erreur lors de la mise à jour de la photo avec l'ID réel: {str(e)}",flush=True)
                 pass
                 
         return jsonify({"id": user.id}), 201
@@ -137,7 +136,6 @@ def update_user(user_id):
 
     try:
         data = request.get_json()
-        print(f"Mise à jour de l'utilisateur {user_id}, données reçues: {str(data.keys())}", flush=True)
         
         user.firstname = data.get("firstname", user.firstname)
         user.lastname = data.get("lastname", user.lastname)
@@ -150,38 +148,29 @@ def update_user(user_id):
             image_bytes = None  # Initialisation de image_bytes
             
             try:
-                print(f"Traitement de la photo pour l'utilisateur {user_id}, type: {type(photo_data)}", flush=True)
-                
                 # Cas 1: La photo est None (suppression de la photo)
                 if photo_data is None:
-                    print(f"Suppression de la photo pour l'utilisateur {user_id}", flush=True)
                     user.photo = None
                 # Format Anvil: bytes directs depuis file.get_bytes()
                 elif isinstance(photo_data, bytes):
-                    print(f"Photo au format bytes, taille: {len(photo_data)}", flush=True)
                     image_bytes = photo_data
                 # Format de type dictionnaire (peut arriver avec certaines sérialisations JSON)
                 elif isinstance(photo_data, dict):
-                    print(f"Photo au format dictionnaire, clés: {photo_data.keys()}", flush=True)
                     if "data" in photo_data:
                         data_value = photo_data["data"]
                         
                         if isinstance(data_value, list):
-                            print("Conversion liste en bytes", flush=True)
                             image_bytes = bytes(data_value)
                         elif isinstance(data_value, str):
-                            print("Décodage base64", flush=True)
                             image_bytes = base64.b64decode(data_value)
                     # Dictionnaire avec clés numériques (tableau d'octets serialisé en JSON)
                     elif all(k.isdigit() for k in photo_data.keys()):
-                        print("Conversion dictionnaire numérique en bytes", flush=True)
                         # Convertir le dictionnaire en liste ordonnée
                         byte_list = [photo_data[str(i)] for i in range(len(photo_data))]
                         # Convertir en bytes
                         image_bytes = bytes(byte_list)
                 # Si c'est une string, essayer de décoder en base64
                 elif isinstance(photo_data, str):
-                    print("Photo reçue comme string, tentative de décodage base64", flush=True)
                     # Si ça commence par data:image, extraire la partie base64
                     if photo_data.startswith('data:image'):
                         base64_data = photo_data.split(',')[1]
@@ -192,7 +181,6 @@ def update_user(user_id):
 
                 # Appliquer la stéganographie pour identifier l'utilisateur
                 if image_bytes:
-                    print(f"Application de la stéganographie, taille de l'image: {len(image_bytes)}", flush=True)
                     try:
                         # Vérifier que l'image peut être ouverte
                         test_img = Image.open(io.BytesIO(image_bytes))
@@ -200,26 +188,21 @@ def update_user(user_id):
                         
                         marked_image = encode_steganography_data(image_bytes, user_id, int(time.time()))
                         user.photo = marked_image
-                        print("Stéganographie appliquée avec succès", flush=True)
                     except Exception as e:
-                        print(f"Erreur lors de la stéganographie: {str(e)}", flush=True)
                         # Sauvegarder l'image sans stéganographie plutôt que d'échouer
                         user.photo = image_bytes
                     
             except Exception as e:
                 # Continuer l'exécution sans la photo au lieu de renvoyer une erreur
-                print(f"Erreur lors du traitement de la photo: {str(e)}", flush=True)
                 import traceback
                 traceback.print_exc()
                 
         # Commit explicite
         db_session.session.commit()
-        print(f"Utilisateur {user_id} mis à jour avec succès", flush=True)
         return jsonify({"message": "Utilisateur mis à jour"})
         
     except Exception as e:
         db_session.session.rollback()
-        print(f"Erreur globale lors de la mise à jour: {str(e)}", flush=True)
         import traceback
         traceback.print_exc()
         return jsonify({"error": f"Erreur lors de la mise à jour: {str(e)}"}), 500
@@ -322,8 +305,6 @@ def resize_image_if_needed(img, max_size=1024):
     
     # Vérifier si l'image est trop grande
     if width > max_size or height > max_size:
-        print(f"Redimensionnement de l'image: {width}x{height} -> max {max_size}", flush=True)
-        
         # Calculer le ratio pour maintenir les proportions
         ratio = min(max_size / width, max_size / height)
         new_width = int(width * ratio)
@@ -357,10 +338,7 @@ def encode_steganography_data(image_bytes, user_id, timestamp=None):
         
         # Redimensionner l'image si nécessaire
         img = resize_image_if_needed(img, max_size=1024)
-        if img.size != original_size:
-            print(f"Image redimensionnée: {original_size} -> {img.size}", flush=True)
         
-
         output = io.BytesIO()
         
         # Conserver le format original si possible, sinon utiliser PNG
@@ -377,11 +355,9 @@ def encode_steganography_data(image_bytes, user_id, timestamp=None):
             metadata.add_text("TeaRoom", encoded_data.decode('ascii'))
             img.save(output, format='PNG', pnginfo=metadata)
         
-        print(f"Métadonnées ajoutées avec succès", flush=True)
         return output.getvalue()
     
     except Exception as e:
-        print(f"Erreur lors du marquage de l'image: {str(e)}", flush=True)
         import traceback
         traceback.print_exc(flush=True)
         # En cas d'erreur, retourner l'image originale
@@ -392,7 +368,6 @@ def decode_steganography_data(image_bytes):
     try:
         # Ouvrir l'image
         img = Image.open(io.BytesIO(image_bytes))
-        print(f"Décodage image: {img.format}, {img.size}, {img.mode}", flush=True)
         
         # Vérifier si des métadonnées existent
         if img.format == 'PNG' and "TeaRoom" in img.info:
@@ -403,16 +378,13 @@ def decode_steganography_data(image_bytes):
                 
                 # Vérifier la signature
                 if data.get("signature") == "TeaRoom":
-                    print(f"Métadonnées trouvées: {data}", flush=True)
                     return data
             except Exception as e:
-                print(f"Erreur lors du décodage des métadonnées: {str(e)}", flush=True)
+                pass
         
-        print("Aucune métadonnée valide trouvée", flush=True)
         return None
     
     except Exception as e:
-        print(f"Erreur lors de l'extraction des métadonnées: {str(e)}", flush=True)
         import traceback
         traceback.print_exc(flush=True)
         return None
@@ -426,8 +398,6 @@ def verify_photo(user_id):
     if request.method == "OPTIONS":
         return jsonify({}), 200
     
-    print(f"Demande de métadonnées pour l'utilisateur {user_id}", flush=True)
-    
     user = User.query.get(user_id)
     if not user:
         return jsonify({"error": "Utilisateur non trouvé"}), 404
@@ -435,7 +405,6 @@ def verify_photo(user_id):
     if not user.photo:
         return jsonify({"error": "L'utilisateur n'a pas de photo"}), 404
     
-    print(f"Tentative de décodage des métadonnées pour l'utilisateur {user_id}", flush=True)
     metadata = decode_steganography_data(user.photo)
     
     if metadata:
@@ -445,7 +414,6 @@ def verify_photo(user_id):
             "date": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(metadata.get("timestamp")))
         })
     else:
-        print(f"Aucune métadonnée trouvée pour l'utilisateur {user_id}", flush=True)
         return jsonify({"error": "Aucune métadonnée trouvée"}), 404
 
 @users_crud.route("/test-steganography", methods=["GET"])

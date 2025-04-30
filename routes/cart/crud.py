@@ -146,7 +146,6 @@ def update_cart_quantity(product_id):
     cart.total_amount = get_total_amount(new_content)
 
     # Débogage: affichage pour confirmer
-    print(f"Mise à jour du panier: {cart.content}")
     
     db_session.session.commit()
     return jsonify({"success": True})

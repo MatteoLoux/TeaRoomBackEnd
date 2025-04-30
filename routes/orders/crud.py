@@ -45,20 +45,16 @@ def decrypt_pdf(encrypted_data):
 
 def generate_pdf_from_order(order):
     """Génère un PDF à partir des données de commande"""
-    print("  DÉBUT generate_pdf_from_order", flush=True)
     
     try:
         buffer = io.BytesIO()
         p = canvas.Canvas(buffer, pagesize=letter)
         
         # Récupérer les informations de l'utilisateur
-        print("  RECHERCHE UTILISATEUR", flush=True)
         user = User.query.get(order.user_id)
-        print(f"  UTILISATEUR TROUVÉ: {user is not None}", flush=True)
         client_name = f"{user.firstname} {user.lastname}" if user else f"Client ID: {order.user_id}"
         
         # En-tête
-        print("  CRÉATION EN-TÊTE", flush=True)
         p.setFont("Helvetica-Bold", 16)
         p.drawString(30, 750, "TeaRoom - Facture")
         
@@ -69,7 +65,6 @@ def generate_pdf_from_order(order):
         p.drawString(30, 680, f"Client: {client_name}")
         
         # Contenu de la commande
-        print("  TRAITEMENT CONTENU", flush=True)
         p.drawString(30, 650, "Détails de la commande:")
         y = 630
         total = 0
@@ -77,34 +72,23 @@ def generate_pdf_from_order(order):
         # Vérifier si content est une liste directement ou s'il contient une clé 'items'
         items = []
         if isinstance(order.content, list):
-            print("  CONTENU EST UNE LISTE", flush=True)
             items = order.content
         elif isinstance(order.content, dict) and "items" in order.content:
-            print("  CONTENU EST UN DICT AVEC ITEMS", flush=True)
             items = order.content["items"]
-        else:
-            print(f"  FORMAT CONTENU NON RECONNU: {type(order.content)}", flush=True)
-        
-        print(f"  NOMBRE D'ITEMS: {len(items)}", flush=True)
         
         for i, item in enumerate(items):
-            print(f"  TRAITEMENT ITEM {i}", flush=True)
             product_id = item.get("product_id")
             quantity = int(item.get("quantity", 1))
-            print(f"  - PRODUCT_ID: {product_id}, QUANTITY: {quantity}", flush=True)
             
             # Récupérer les détails du produit depuis la base de données
             product = Tea.query.get(product_id)
             if not product:
-                print(f"  - PAS UN THÉ, RECHERCHE GOODIE", flush=True)
                 product = Goodie.query.get(product_id)
             
             if product:
-                print(f"  - PRODUIT TROUVÉ: {product.name}", flush=True)
                 name = product.name
                 price = float(product.price)
             else:
-                print(f"  - PRODUIT NON TROUVÉ", flush=True)
                 name = f"Produit #{product_id}"
                 price = 0
                 
@@ -115,7 +99,6 @@ def generate_pdf_from_order(order):
             y -= 20
         
         # Total
-        print("  FINALISATION PDF", flush=True)
         p.setFont("Helvetica-Bold", 14)
         p.drawString(30, y-20, f"Total: {total:.2f} €")
         
@@ -127,11 +110,9 @@ def generate_pdf_from_order(order):
         p.save()
         
         buffer.seek(0)
-        print("  PDF GÉNÉRÉ AVEC SUCCÈS", flush=True)
         return buffer.getvalue()
     
     except Exception as e:
-        print(f"  ERREUR GÉNÉRATION PDF: {str(e)}", flush=True)
         traceback.print_exc(file=sys.stdout)
         raise
 
@@ -182,23 +163,16 @@ def get_order(order_id):
 @orders_crud.route("/", methods=["POST"], strict_slashes=False)
 @require_jwt
 def create_order():
-    print("===== DÉBUT CREATE_ORDER =====", flush=True)
     
     try:
         data = request.get_json()
-        print(f"DONNÉES REÇUES: {json.dumps(data)}", flush=True)
     except Exception as e:
-        print(f"ERREUR PARSING JSON: {str(e)}", flush=True)
         return jsonify({"error": "Données JSON invalides"}), 400
     
     try:
         # Validation des données obligatoires
         if not "content" in data:
-            print("ERREUR: Clé 'content' manquante", flush=True)
             return jsonify({"error": "Le contenu de la commande est obligatoire"}), 400
-        
-        print(f"USER_ID: {request.user_id}", flush=True)
-        print(f"CONTENT TYPE: {type(data['content'])}", flush=True)
         
         # Créer la commande
         try:
@@ -207,68 +181,49 @@ def create_order():
                 content=data["content"],
                 is_done=data.get("is_done", False)
             )
-            print("COMMANDE CRÉÉE EN MÉMOIRE", flush=True)
         except Exception as e:
-            print(f"ERREUR CRÉATION OBJET: {str(e)}", flush=True)
             traceback.print_exc(file=sys.stdout)
             return jsonify({"error": f"Erreur lors de la création de l'objet commande: {str(e)}"}), 500
         
         try:
             db_session.session.add(order)
-            print("COMMANDE AJOUTÉE À LA SESSION", flush=True)
             db_session.session.flush()
-            print(f"COMMANDE FLUSH, ID: {order.id}", flush=True)
         except Exception as e:
-            print(f"ERREUR DB FLUSH: {str(e)}", flush=True)
             traceback.print_exc(file=sys.stdout)
             db_session.session.rollback()
             return jsonify({"error": f"Erreur base de données: {str(e)}"}), 500
         
         # Générer et chiffrer le PDF
         try:
-            print("DÉBUT GÉNÉRATION PDF", flush=True)
-            
             # Déboguer le contenu de la commande
-            print(f"CONTENU COMMANDE: {json.dumps(order.content)}", flush=True)
             
             # Afficher details des produits
             if isinstance(order.content, list):
                 for i, item in enumerate(order.content):
-                    print(f"PRODUIT {i}: {json.dumps(item)}", flush=True)
                     product_id = item.get('product_id')
                     tea = Tea.query.get(product_id)
                     goodie = Goodie.query.get(product_id)
-                    print(f"  - TEA TROUVÉ: {tea is not None}", flush=True)
-                    print(f"  - GOODIE TROUVÉ: {goodie is not None}", flush=True)
             
             pdf_data = generate_pdf_from_order(order)
-            print(f"PDF GÉNÉRÉ, TAILLE: {len(pdf_data)} OCTETS", flush=True)
             
             encrypted_pdf = encrypt_pdf(pdf_data)
-            print(f"PDF CHIFFRÉ, TAILLE: {len(encrypted_pdf)} OCTETS", flush=True)
             
             order.pdf_invoice = encrypted_pdf
-            print(f"PDF ASSIGNÉ À LA COMMANDE", flush=True)
             
         except Exception as e:
-            print(f"ERREUR PDF: {str(e)}", flush=True)
             traceback.print_exc(file=sys.stdout)
             # Continuer sans PDF
         
         try:
             db_session.session.commit()
-            print(f"COMMANDE SAUVEGARDÉE, ID: {order.id}", flush=True)
         except Exception as e:
-            print(f"ERREUR COMMIT: {str(e)}", flush=True)
             traceback.print_exc(file=sys.stdout)
             db_session.session.rollback()
             return jsonify({"error": f"Erreur lors de l'enregistrement: {str(e)}"}), 500
         
-        print("===== FIN CREATE_ORDER =====", flush=True)
         return jsonify({"id": order.id}), 201
     
     except Exception as e:
-        print(f"ERREUR GLOBALE: {str(e)}", flush=True)
         traceback.print_exc(file=sys.stdout)
         db_session.session.rollback()
         return jsonify({"error": f"Erreur lors de la création de la commande: {str(e)}"}), 500
@@ -301,9 +256,8 @@ def update_order(order_id):
                 pdf_data = generate_pdf_from_order(order)
                 encrypted_pdf = encrypt_pdf(pdf_data)
                 order.pdf_invoice = encrypted_pdf
-                print(f"PDF régénéré pour la commande {order.id}", flush=True)
             except Exception as e:
-                print(f"Erreur lors de la régénération du PDF: {str(e)}", flush=True)
+                pass
         
         db_session.session.commit()
         return jsonify({"message": "Commande mise à jour"})
@@ -363,10 +317,6 @@ def get_order_pdf(order_id):
         # Convertir en bytes si ce n'est pas déjà le bon type
         pdf_invoice_bytes = bytes(order.pdf_invoice) if hasattr(order.pdf_invoice, '__bytes__') else order.pdf_invoice
         
-        # Log pour debug
-        print(f"TYPE AVANT CONVERSION: {type(order.pdf_invoice)}", flush=True)
-        print(f"TYPE APRÈS CONVERSION: {type(pdf_invoice_bytes)}", flush=True)
-        
         # Déchiffrer le PDF
         decrypted_pdf = decrypt_pdf(pdf_invoice_bytes)
         
@@ -384,6 +334,5 @@ def get_order_pdf(order_id):
             download_name=filename
         )
     except Exception as e:
-        print(f"ERREUR PDF: {str(e)}", flush=True)
         traceback.print_exc(file=sys.stdout)
         return jsonify({"error": f"Erreur lors du déchiffrement du PDF: {str(e)}"}), 500
